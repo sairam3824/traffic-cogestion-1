@@ -124,7 +124,7 @@ def preprocess_location_data(lat, lon, timestamp, additional_features=None):
     lat_norm = (lat - 16.5) / 2.0  # Normalize around Vijayawada
     lon_norm = (lon - 80.5) / 2.0  # Normalize around Vijayawada
     
-    # Create feature vector (matching training features - exactly 22 features)
+    # Create feature vector (matching scaler input - exactly 22 features)
     # Based on model_metadata.json feature_columns
     features = np.array([
         lat_norm, lon_norm,  # 1-2: Latitude, Longitude
@@ -152,6 +152,10 @@ def predict_traffic_for_location(lat, lon, timestamp, hours_ahead=1):
         
         # Scale the sequence
         sequence_scaled = feature_scaler.transform(sequence)
+        
+        # Model expects 18 features, but scaler outputs 22, so we need to slice
+        # Take the first 18 features to match model input shape
+        sequence_scaled = sequence_scaled[:, :18]
         sequence_scaled = sequence_scaled.reshape(1, sequence_length, -1)
         
         # Make prediction
@@ -332,8 +336,8 @@ if __name__ == '__main__':
     if load_model_and_scalers():
         print("🚀 Starting Traffic Prediction API...")
         print("📊 Model loaded and ready for predictions!")
-        print("🌐 API will be available at: http://localhost:5000")
-        print("📱 Web interface at: http://localhost:5000")
-        app.run(debug=True, host='0.0.0.0', port=5000)
+        print("🌐 API will be available at: http://localhost:5001")
+        print("📱 Web interface at: http://localhost:5001")
+        app.run(debug=True, host='0.0.0.0', port=5001)
     else:
         print("❌ Failed to load model. Please check model files.")

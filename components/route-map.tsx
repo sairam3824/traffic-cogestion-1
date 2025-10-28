@@ -23,8 +23,16 @@ export default function RouteMap({ origin, destination, polyline, distance, dura
   const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null)
   const [userHasInteracted, setUserHasInteracted] = useState(false)
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null)
+  const [trafficSegments, setTrafficSegments] = useState<any[]>([])
+  const [isLoadingTraffic, setIsLoadingTraffic] = useState(false)
+  const [routeScores, setRouteScores] = useState<{ [key: number]: { score: number, avgTraffic: number, recommendation: string } }>({})
+  const [bestRouteIndex, setBestRouteIndex] = useState<number>(0)
+  const [showRouteOptimization, setShowRouteOptimization] = useState(true)
 
   const { theme } = useTheme()
+
+  // Apply theme-aware styling
+  const isDark = theme === 'dark'
   const [showTraffic, setShowTraffic] = useState(true)
   const [showTransit, setShowTransit] = useState(false)
   const [showBicycling, setShowBicycling] = useState(false)
@@ -73,6 +81,211 @@ export default function RouteMap({ origin, destination, polyline, distance, dura
     }
   }, [polyline])
 
+  // Function to analyze and score all available routes
+  const analyzeAllRoutes = async (allRoutes: google.maps.DirectionsRoute[]) => {
+    const scores: { [key: number]: { score: number, avgTraffic: number, recommendation: string } } = {}
+    let bestScore = Infinity
+    let bestIndex = 0
+
+    for (let routeIndex = 0; routeIndex < allRoutes.length; routeIndex++) {
+      const route = allRoutes[routeIndex]
+      const leg = route.legs[0]
+      const steps = leg.steps
+
+      // Sample fewer points for multiple routes to avoid API overload
+      const sampleSteps = steps.filter((_, index) => index % Math.max(1, Math.floor(steps.length / 5)) === 0)
+      let totalTraffic = 0
+      let validPredictions = 0
+
+      for (const step of sampleSteps) {
+        try {
+          const lat = step.start_location.lat()
+          const lng = step.start_location.lng()
+
+          const response = await fetch('/api/ucs-predict', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              latitude: lat,
+              longitude: lng,
+              timestamp: new Date().toISOString()
+            })
+          })
+
+          if (response.ok) {
+            const result = await response.json()
+            if (result.success) {
+              totalTraffic += result.data.prediction
+              validPredictions++
+            }
+          }
+        } catch (error) {
+          // Use fallback traffic estimation
+          totalTraffic += 50 // Assume moderate traffic
+          validPredictions++
+        }
+      }
+
+      const avgTraffic = validPredictions > 0 ? totalTraffic / validPredictions : 50
+
+      // Calculate route score (lower is better)
+      // Factors: traffic (60%), distance (25%), duration (15%)
+      const distanceKm = leg.distance?.value ? leg.distance.value / 1000 : 0
+      const durationMin = leg.duration?.value ? leg.duration.value / 60 : 0
+
+      const trafficScore = avgTraffic // 0-100
+      const distanceScore = Math.min(100, distanceKm * 2) // Normalize distance
+      const durationScore = Math.min(100, durationMin) // Normalize duration
+
+      const compositeScore = (trafficScore * 0.6) + (distanceScore * 0.25) + (durationScore * 0.15)
+
+      let recommendation = ""
+      if (avgTraffic < 30) {
+        recommendation = "🟢 Excellent - Light traffic"
+      } else if (avgTraffic < 50) {
+        recommendation = "🟡 Good - Moderate traffic"
+      } else if (avgTraffic < 70) {
+        recommendation = "🟠 Fair - Heavy traffic"
+      } else {
+        recommendation = "🔴 Poor - Very heavy traffic"
+      }
+
+      scores[routeIndex] = {
+        score: compositeScore,
+        avgTraffic,
+        recommendation
+      }
+
+      if (compositeScore < bestScore) {
+        bestScore = compositeScore
+        bestIndex = routeIndex
+      }
+    }
+
+    setRouteScores(scores)
+    setBestRouteIndex(bestIndex)
+
+    // Auto-select best route if it's significantly better
+    if (bestIndex !== selectedRouteIndex && scores[bestIndex].avgTraffic < scores[selectedRouteIndex]?.avgTraffic - 15) {
+      setSelectedRouteIndex(bestIndex)
+    }
+
+    return bestIndex
+  }
+
+  // Function to get traffic predictions for route segments following actual roads
+  const getTrafficPredictionsForRoute = async (route: google.maps.DirectionsRoute) => {
+    setIsLoadingTraffic(true)
+    const segments: any[] = []
+
+    try {
+      const leg = route.legs[0]
+      const steps = leg.steps
+
+      // Process each step to get traffic predictions and preserve road paths
+      for (let i = 0; i < steps.length; i++) {
+        const step = steps[i]
+
+        // Sample every 4th step to balance performance and accuracy, but always include first and last
+        const shouldSample = (i % 4 === 0) || (i === 0) || (i === steps.length - 1)
+
+        if (!shouldSample) {
+          // For non-sampled steps, use moderate traffic as default
+          segments.push({
+            stepIndex: i,
+            trafficLevel: 'medium',
+            prediction: 45,
+            distance: step.distance?.value || 0,
+            duration: step.duration?.value || 0
+          })
+          continue
+        }
+
+        const lat = step.start_location.lat()
+        const lng = step.start_location.lng()
+
+        try {
+          // Get prediction from our UCS model for sampled steps
+          const response = await fetch('/api/ucs-predict', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              latitude: lat,
+              longitude: lng,
+              timestamp: new Date().toISOString()
+            })
+          })
+
+          if (response.ok) {
+            const result = await response.json()
+            if (result.success) {
+              const prediction = result.data.prediction
+              let trafficLevel: 'low' | 'medium' | 'high'
+
+              // Convert prediction percentage to traffic level
+              if (prediction >= 60) trafficLevel = 'high'
+              else if (prediction >= 35) trafficLevel = 'medium'
+              else trafficLevel = 'low'
+
+              segments.push({
+                stepIndex: i,
+                trafficLevel,
+                prediction,
+                distance: step.distance?.value || 0,
+                duration: step.duration?.value || 0,
+                sampled: true
+              })
+            }
+          }
+        } catch (error) {
+          console.error('Error getting traffic prediction for step:', error)
+          // Add step with moderate traffic as fallback
+          segments.push({
+            stepIndex: i,
+            trafficLevel: 'medium',
+            prediction: 50,
+            distance: step.distance?.value || 0,
+            duration: step.duration?.value || 0
+          })
+        }
+      }
+
+      // Apply traffic propagation to smooth out predictions
+      const propagationRange = 3
+      for (let i = 0; i < segments.length; i++) {
+        if (segments[i].sampled) {
+          const sampledPrediction = segments[i].prediction
+
+          // Propagate to nearby segments
+          for (let j = Math.max(0, i - propagationRange); j <= Math.min(segments.length - 1, i + propagationRange); j++) {
+            if (j !== i && segments[j] && !segments[j].sampled) {
+              const distance = Math.abs(j - i)
+              const influence = Math.max(0, 1 - (distance / (propagationRange + 1)))
+              const adjustedPrediction = (segments[j].prediction * (1 - influence)) + (sampledPrediction * influence)
+
+              let adjustedLevel: 'low' | 'medium' | 'high'
+              if (adjustedPrediction >= 60) adjustedLevel = 'high'
+              else if (adjustedPrediction >= 35) adjustedLevel = 'medium'
+              else adjustedLevel = 'low'
+
+              segments[j] = {
+                ...segments[j],
+                trafficLevel: adjustedLevel,
+                prediction: adjustedPrediction
+              }
+            }
+          }
+        }
+      }
+
+      setTrafficSegments(segments)
+    } catch (error) {
+      console.error('Error processing route for traffic predictions:', error)
+    } finally {
+      setIsLoadingTraffic(false)
+    }
+  }
+
   // Compute route via Google Directions for native rendering
   useEffect(() => {
     if (!mapInstance) return
@@ -95,23 +308,38 @@ export default function RouteMap({ origin, destination, polyline, distance, dura
           avoidTolls,
           region: "IN",
         },
-        (result, status) => {
+        async (result, status) => {
           if (status === google.maps.DirectionsStatus.OK && result) {
-            setSelectedRouteIndex(0)
             setDirections(result)
+
+            // Analyze all routes to find the best one
+            if (result.routes.length > 1) {
+              const bestIndex = await analyzeAllRoutes(result.routes)
+              setSelectedRouteIndex(bestIndex)
+              // Get detailed traffic predictions for the best route
+              getTrafficPredictionsForRoute(result.routes[bestIndex])
+            } else {
+              setSelectedRouteIndex(0)
+              // Get traffic predictions for the single route
+              getTrafficPredictionsForRoute(result.routes[0])
+            }
+
             try {
-              const bounds = result.routes?.[0]?.bounds
+              const bounds = result.routes?.[selectedRouteIndex]?.bounds
               if (bounds) mapInstance.fitBounds(bounds)
-            } catch {}
+            } catch { }
           } else {
             console.warn("[v0] DirectionsService status:", status)
             setDirections(null)
+            setTrafficSegments([])
+            setRouteScores({})
           }
         },
       )
     } catch (e) {
       console.error("[v0] Directions error:", e)
       setDirections(null)
+      setTrafficSegments([])
     }
   }, [origin, destination, mapInstance, travelMode, avoidFerries, avoidHighways, avoidTolls])
 
@@ -310,20 +538,155 @@ export default function RouteMap({ origin, destination, polyline, distance, dura
               />
             )}
 
-            {/* Directions rendering (preferred) */}
+            {/* Enhanced Directions rendering with traffic-colored segments */}
             {directions ? (
-              <DirectionsRenderer
-                options={{
-                  directions,
-                  routeIndex: selectedRouteIndex,
-                  suppressMarkers: false,
-                  preserveViewport: false,
-                  polylineOptions: {
-                    strokeOpacity: 1,
-                    strokeWeight: 6,
-                  },
-                }}
-              />
+              <>
+                {/* Always render the base DirectionsRenderer for accurate road-following */}
+                <DirectionsRenderer
+                  options={{
+                    directions,
+                    routeIndex: selectedRouteIndex,
+                    suppressMarkers: true,
+                    preserveViewport: false,
+                    polylineOptions: {
+                      strokeColor: trafficSegments.length > 0 ? '#e5e7eb' : getPolylineColor(), // Light gray when traffic overlay is active
+                      strokeOpacity: trafficSegments.length > 0 ? 0.3 : 0.7,
+                      strokeWeight: trafficSegments.length > 0 ? 2 : 5, // Thinner when traffic overlay is active
+                    },
+                  }}
+                />
+
+                {/* Overlay traffic-colored segments on top of the base route */}
+                {trafficSegments.length > 0 && trafficSegments.map((segment, index) => {
+                  const getSegmentColor = (trafficLevel: string) => {
+                    switch (trafficLevel) {
+                      case 'high': return '#ef4444'   // Red
+                      case 'medium': return '#f97316' // Orange  
+                      case 'low': return '#10b981'    // Green
+                      default: return '#6b7280'       // Gray
+                    }
+                  }
+
+                  // Get the actual road path for this step from Google Directions
+                  let segmentPath: google.maps.LatLng[] = []
+
+                  if (directions && directions.routes[selectedRouteIndex]) {
+                    const currentStep = directions.routes[selectedRouteIndex].legs[0].steps[segment.stepIndex]
+                    if (currentStep) {
+                      // Use the step's polyline for perfect road accuracy
+                      if (currentStep.polyline?.points && window.google?.maps?.geometry?.encoding) {
+                        try {
+                          segmentPath = window.google.maps.geometry.encoding.decodePath(currentStep.polyline.points)
+                        } catch (error) {
+                          console.error('Error decoding step polyline:', error)
+                          // Fallback to start/end locations
+                          segmentPath = [currentStep.start_location, currentStep.end_location]
+                        }
+                      } else {
+                        // Fallback to start/end locations
+                        segmentPath = [currentStep.start_location, currentStep.end_location]
+                      }
+                    }
+                  }
+
+                  // Skip segments without valid paths
+                  if (!segmentPath || segmentPath.length === 0) {
+                    return null
+                  }
+
+                  return (
+                    <Polyline
+                      key={`traffic-overlay-${segment.stepIndex || index}`}
+                      path={segmentPath}
+                      options={{
+                        strokeColor: getSegmentColor(segment.trafficLevel),
+                        strokeWeight: 5,
+                        strokeOpacity: 0.8,
+                        geodesic: false, // Important: false for road-following accuracy
+                        zIndex: 1000, // Ensure traffic overlay appears above base route
+                      }}
+                      onClick={() => {
+                        // Show traffic info for this segment
+                        const midPoint = segmentPath[Math.floor(segmentPath.length / 2)]
+                        const infoWindow = new google.maps.InfoWindow({
+                          content: `
+                            <div style="padding: 10px; min-width: 160px;">
+                              <strong style="color: ${getSegmentColor(segment.trafficLevel)};">
+                                ${segment.trafficLevel.toUpperCase()} TRAFFIC
+                              </strong><br/>
+                              <span>Congestion: ${segment.prediction.toFixed(1)}%</span><br/>
+                              <span style="font-size: 11px; color: #666;">
+                                Distance: ${((segment.distance || 0) / 1000).toFixed(1)} km
+                              </span><br/>
+                              <span style="font-size: 11px; color: #666;">
+                                Step ${segment.stepIndex + 1} of ${directions.routes[selectedRouteIndex].legs[0].steps.length}
+                              </span>
+                            </div>
+                          `,
+                          position: midPoint
+                        })
+                        infoWindow.open(mapInstance)
+                      }}
+                    />
+                  )
+                }).filter(Boolean)}
+
+                {/* Loading indicator overlay */}
+                {isLoadingTraffic && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '10px',
+                    left: '10px',
+                    background: 'rgba(255, 255, 255, 0.95)',
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                    fontSize: '13px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    zIndex: 1001
+                  }}>
+                    <div style={{
+                      width: '16px',
+                      height: '16px',
+                      border: '2px solid #e5e7eb',
+                      borderTop: '2px solid #3b82f6',
+                      borderRadius: '50%',
+                      animation: 'spin 1s linear infinite'
+                    }}></div>
+                    <span>Analyzing traffic on route...</span>
+                  </div>
+                )}
+
+                {/* Render markers for origin and destination */}
+                <Marker
+                  position={{ lat: origin.lat, lng: origin.lng }}
+                  title={origin.name}
+                  onClick={() => setSelectedMarker("origin")}
+                  icon={{
+                    path: "M0,-28a28,28 0 0,1 56,0c0,28-28,68-28,68S0,0 0,-28z",
+                    fillColor: "#10b981",
+                    fillOpacity: 1,
+                    strokeColor: "#fff",
+                    strokeWeight: 2,
+                    scale: 0.7,
+                  }}
+                />
+                <Marker
+                  position={{ lat: destination.lat, lng: destination.lng }}
+                  title={destination.name}
+                  onClick={() => setSelectedMarker("destination")}
+                  icon={{
+                    path: "M0,-28a28,28 0 0,1 56,0c0,28-28,68-28,68S0,0 0,-28z",
+                    fillColor: "#ef4444",
+                    fillOpacity: 1,
+                    strokeColor: "#fff",
+                    strokeWeight: 2,
+                    scale: 0.7,
+                  }}
+                />
+              </>
             ) : (
               <>
                 {/* Fallback markers and polyline using provided data */}
@@ -368,7 +731,7 @@ export default function RouteMap({ origin, destination, polyline, distance, dura
               </>
             )}
 
-            
+
 
             {/* Origin Info Window */}
             {selectedMarker === "origin" && (
@@ -459,6 +822,21 @@ export default function RouteMap({ origin, destination, polyline, distance, dura
             <input type="checkbox" className="accent-primary" checked={avoidFerries} onChange={(e) => setAvoidFerries(e.target.checked)} />
             Avoid ferries
           </label>
+          <button
+            onClick={() => {
+              // Smart route optimization - avoid high traffic areas
+              setAvoidHighways(false) // Allow highways for better traffic flow
+              // Trigger route recalculation
+              if (mapInstance && origin && destination) {
+                // This will trigger the useEffect to recalculate routes
+                setDirections(null)
+              }
+            }}
+            className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+            title="Optimize route to avoid traffic"
+          >
+            🚀 Optimize Route
+          </button>
           <div className="h-5 w-px bg-border" />
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground">Map</span>
@@ -493,9 +871,9 @@ export default function RouteMap({ origin, destination, polyline, distance, dura
                   try {
                     mapInstance?.setCenter(loc)
                     mapInstance?.setZoom(14)
-                  } catch {}
+                  } catch { }
                 },
-                () => {},
+                () => { },
                 { enableHighAccuracy: true, timeout: 10000 },
               )
             }}
@@ -503,18 +881,114 @@ export default function RouteMap({ origin, destination, polyline, distance, dura
             My location
           </button>
         </div>
-        {directions && directions.routes?.length > 1 && (
-          <div className="mb-2 flex flex-wrap gap-2">
+        {/* Route Optimization Panel */}
+        {directions && directions.routes?.length > 1 && showRouteOptimization && (
+          <div className="mb-4 p-4 bg-muted/50 rounded-lg border">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-sm">🚗 Route Optimization</h3>
+              <button
+                onClick={() => setShowRouteOptimization(false)}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                ✕ Hide
+              </button>
+            </div>
+
+            <div className="grid gap-2">
+              {directions.routes.map((r, idx) => {
+                const { distanceKm, durationMin } = getRouteSummary(r)
+                const active = idx === selectedRouteIndex
+                const isBest = idx === bestRouteIndex
+                const score = routeScores[idx]
+
+                return (
+                  <button
+                    key={idx}
+                    className={`p-3 rounded-md border text-left text-sm transition-all ${active
+                      ? 'bg-primary text-primary-foreground border-primary shadow-md'
+                      : 'bg-card text-foreground border-border hover:bg-accent hover:text-accent-foreground'
+                      }`}
+                    onClick={() => {
+                      setSelectedRouteIndex(idx)
+                      getTrafficPredictionsForRoute(directions.routes[idx])
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">
+                          Route {idx + 1} {isBest && '⭐'}
+                        </span>
+                        {score && (
+                          <span className="text-xs px-2 py-1 rounded"
+                            style={{
+                              backgroundColor: score.avgTraffic < 40 ? '#10b981' :
+                                score.avgTraffic < 60 ? '#f97316' : '#ef4444',
+                              color: 'white'
+                            }}>
+                            {score.avgTraffic.toFixed(0)}% traffic
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-right">
+                        {durationMin} min · {distanceKm.toFixed(1)} km
+                      </div>
+                    </div>
+                    {score && (
+                      <div className="text-xs mt-1 opacity-90">
+                        {score.recommendation}
+                      </div>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Smart Suggestions */}
+            <div className="mt-3 space-y-2">
+              {routeScores[bestRouteIndex] && bestRouteIndex !== selectedRouteIndex && (
+                <div className="p-2 bg-green-100 dark:bg-green-900/20 rounded text-xs">
+                  💡 <strong>Better Route:</strong> Route {bestRouteIndex + 1} has {(routeScores[selectedRouteIndex]?.avgTraffic - routeScores[bestRouteIndex].avgTraffic).toFixed(0)}% less traffic
+                </div>
+              )}
+
+              {routeScores[selectedRouteIndex]?.avgTraffic > 60 && (
+                <div className="p-2 bg-yellow-100 dark:bg-yellow-900/20 rounded text-xs">
+                  ⏰ <strong>Time Suggestion:</strong> Consider traveling 30-60 minutes earlier or later to avoid peak traffic
+                </div>
+              )}
+
+              {routeScores[selectedRouteIndex]?.avgTraffic > 75 && (
+                <div className="p-2 bg-red-100 dark:bg-red-900/20 rounded text-xs">
+                  🚨 <strong>High Traffic Alert:</strong> Current route has severe congestion. Consider public transit or postponing travel.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Simple route selector for when optimization panel is hidden */}
+        {directions && directions.routes?.length > 1 && !showRouteOptimization && (
+          <div className="mb-2 flex flex-wrap gap-2 items-center">
+            <button
+              onClick={() => setShowRouteOptimization(true)}
+              className="text-xs px-2 py-1 bg-primary text-primary-foreground rounded hover:bg-primary/90"
+            >
+              🚗 Show Route Options
+            </button>
             {directions.routes.map((r, idx) => {
               const { distanceKm, durationMin } = getRouteSummary(r)
               const active = idx === selectedRouteIndex
+              const isBest = idx === bestRouteIndex
               return (
                 <button
                   key={idx}
                   className={`px-3 py-1 rounded-md border text-sm ${active ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-foreground border-border hover:bg-accent hover:text-accent-foreground'}`}
-                  onClick={() => setSelectedRouteIndex(idx)}
+                  onClick={() => {
+                    setSelectedRouteIndex(idx)
+                    getTrafficPredictionsForRoute(directions.routes[idx])
+                  }}
                 >
-                  {durationMin} min · {distanceKm.toFixed(1)} km {active ? '(Selected)' : ''}
+                  Route {idx + 1} {isBest && '⭐'} · {durationMin} min
                 </button>
               )
             })}
@@ -522,7 +996,7 @@ export default function RouteMap({ origin, destination, polyline, distance, dura
         )}
         {/* Traffic Density Legend */}
         <div className="mt-4 flex items-center justify-between gap-4 text-sm">
-          <div className="flex gap-4">
+          <div className="flex gap-4 items-center">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-green-500"></div>
               <span className="text-foreground">Light Traffic</span>
@@ -535,6 +1009,23 @@ export default function RouteMap({ origin, destination, polyline, distance, dura
               <div className="w-3 h-3 rounded-full bg-red-500"></div>
               <span className="text-foreground">Heavy</span>
             </div>
+            {isLoadingTraffic && (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary"></div>
+                <span className="text-xs">Loading traffic predictions...</span>
+              </div>
+            )}
+            {trafficSegments.length > 0 && !isLoadingTraffic && (
+              <div className="text-xs text-muted-foreground">
+                ✅ AI-powered traffic analysis ({trafficSegments.length} segments)
+              </div>
+            )}
+            {/* Traffic Alert */}
+            {routeScores[selectedRouteIndex] && routeScores[selectedRouteIndex].avgTraffic > 65 && (
+              <div className="flex items-center gap-2 text-xs text-red-600 dark:text-red-400">
+                ⚠️ High traffic detected - consider alternative route or time
+              </div>
+            )}
           </div>
           <button
             onClick={resetMapView}
