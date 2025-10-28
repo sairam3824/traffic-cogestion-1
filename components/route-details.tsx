@@ -54,9 +54,9 @@ export default function RouteDetails({
   }
 
   const getCongestionMessage = () => {
-    if (congestionLevel < 0.3) return { text: "Clear roads ahead!", icon: "🟢", severity: "low" }
-    if (congestionLevel < 0.6) return { text: "Moderate congestion expected", icon: "🟡", severity: "medium" }
-    return { text: "Heavy congestion - consider alternate route", icon: "🔴", severity: "high" }
+    if (congestionLevel < 0.3) return { text: "Clear roads ahead!", icon: "✅", severity: "low" }
+    if (congestionLevel < 0.6) return { text: "Moderate congestion expected", icon: "⚠️", severity: "medium" }
+    return { text: "Heavy congestion - consider alternate route", icon: "🚨", severity: "high" }
   }
 
   const congestionInfo = getCongestionMessage()

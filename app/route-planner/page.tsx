@@ -38,6 +38,7 @@ export default function RoutePlannerPage() {
   const [origin, setOrigin] = useState<LocationPrediction | null>(null)
   const [destination, setDestination] = useState<LocationPrediction | null>(null)
   const [loading, setLoading] = useState(false)
+  const [dynamicTrafficLevel, setDynamicTrafficLevel] = useState<'low' | 'medium' | 'high' | 'unknown'>('unknown')
 
   const handleRouteSelect = async (originLocation: LocationPrediction, destinationLocation: LocationPrediction) => {
     try {
@@ -96,11 +97,12 @@ export default function RoutePlannerPage() {
                   distance={selectedRoute.distance_km}
                   duration={selectedRoute.duration_minutes}
                   trafficDensity={selectedRoute.traffic_density}
+                  onTrafficLevelChange={setDynamicTrafficLevel}
                 />
                 <RouteDetails
                   distance={selectedRoute.distance_km}
                   duration={selectedRoute.duration_minutes}
-                  trafficDensity={selectedRoute.traffic_density}
+                  trafficDensity={dynamicTrafficLevel !== 'unknown' ? dynamicTrafficLevel : selectedRoute.traffic_density}
                   steps={selectedRoute.steps || []}
                   congestionLevel={selectedRoute.congestion_level || 0}
                 />

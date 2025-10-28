@@ -1,0 +1,39 @@
+# Traffic Prediction Application - Quick Start Commands
+
+## Method 1: Two Terminals (Recommended for development)
+
+### Terminal 1 - Flask Backend:
+```bash
+# If you're in the main project directory:
+cd UCS_Model-main && conda run -n traffic-prediction python traffic_prediction_api.py
+
+# If you're already in UCS_Model-main directory:
+conda run -n traffic-prediction python traffic_prediction_api.py
+```
+
+### Terminal 2 - Next.js Frontend:
+```bash
+npm run dev
+```
+
+## Method 2: Single Command (Background processes)
+```bash
+./manage_application.sh start
+```
+
+## Access URLs:
+- Main App: http://localhost:3000
+- Flask API: http://localhost:5001
+
+## Management Commands:
+- Check status: `./manage_application.sh status`
+- Stop services: `./manage_application.sh stop`
+- Restart: `./manage_application.sh restart`
+
+
+
+terminal 1
+cd UCS_Model-main
+conda run -n traffic-prediction python traffic_prediction_api.py    
+terminal 2
+npm run dev

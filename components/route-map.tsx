@@ -12,9 +12,10 @@ interface RouteMapProps {
   distance: number
   duration: number
   trafficDensity?: 'low' | 'medium' | 'high' | 'unknown'
+  onTrafficLevelChange?: (level: 'low' | 'medium' | 'high' | 'unknown') => void
 }
 
-export default function RouteMap({ origin, destination, polyline, distance, duration, trafficDensity }: RouteMapProps) {
+export default function RouteMap({ origin, destination, polyline, distance, duration, trafficDensity, onTrafficLevelChange }: RouteMapProps) {
   const [apiKey, setApiKey] = useState<string>("")
   const [selectedMarker, setSelectedMarker] = useState<"origin" | "destination" | null>(null)
   const [decodedPath, setDecodedPath] = useState<any[]>([])
@@ -142,13 +143,13 @@ export default function RouteMap({ origin, destination, polyline, distance, dura
 
       let recommendation = ""
       if (avgTraffic < 30) {
-        recommendation = "🟢 Excellent - Light traffic"
+        recommendation = "✅ Excellent - Light traffic"
       } else if (avgTraffic < 50) {
-        recommendation = "🟡 Good - Moderate traffic"
+        recommendation = "⚠️ Good - Moderate traffic"
       } else if (avgTraffic < 70) {
-        recommendation = "🟠 Fair - Heavy traffic"
+        recommendation = "🚧 Fair - Heavy traffic"
       } else {
-        recommendation = "🔴 Poor - Very heavy traffic"
+        recommendation = "🚨 Poor - Very heavy traffic"
       }
 
       scores[routeIndex] = {
@@ -413,6 +414,7 @@ export default function RouteMap({ origin, destination, polyline, distance, dura
   const calculateRouteTrafficLevel = (segments: any[]) => {
     if (!segments || segments.length === 0) {
       setCurrentRouteTrafficLevel('unknown')
+      onTrafficLevelChange?.('unknown')
       return
     }
 
@@ -431,6 +433,7 @@ export default function RouteMap({ origin, destination, polyline, distance, dura
     }
 
     setCurrentRouteTrafficLevel(overallLevel)
+    onTrafficLevelChange?.(overallLevel)
   }
 
   const resetMapView = () => {
@@ -935,7 +938,13 @@ export default function RouteMap({ origin, destination, polyline, distance, dura
         {directions && directions.routes?.length > 1 && showRouteOptimization && (
           <div className="mb-4 p-4 bg-muted/50 rounded-lg border">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-sm">🚗 Route Optimization</h3>
+              <h3 className="font-semibold text-sm flex items-center gap-2">
+                <svg className="w-4 h-4 text-primary" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/>
+                  <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1V5a1 1 0 00-1-1H3zM14 7a1 1 0 00-1 1v6.05A2.5 2.5 0 0115.95 16H17a1 1 0 001-1V8a1 1 0 00-.293-.707L15 4.586A1 1 0 0014.414 4H14v3z"/>
+                </svg>
+                Route Optimization
+              </h3>
               <button
                 onClick={() => setShowRouteOptimization(false)}
                 className="text-xs text-muted-foreground hover:text-foreground"
@@ -1037,7 +1046,11 @@ export default function RouteMap({ origin, destination, polyline, distance, dura
               onClick={() => setShowRouteOptimization(true)}
               className="text-xs px-2 py-1 bg-primary text-primary-foreground rounded hover:bg-primary/90"
             >
-              🚗 Show Route Options
+              <svg className="w-4 h-4 mr-1 inline" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/>
+                <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1V5a1 1 0 00-1-1H3zM14 7a1 1 0 00-1 1v6.05A2.5 2.5 0 0115.95 16H17a1 1 0 001-1V8a1 1 0 00-.293-.707L15 4.586A1 1 0 0014.414 4H14v3z"/>
+              </svg>
+              Show Route Options
             </button>
             {directions.routes.map((r, idx) => {
               const { distanceKm, durationMin } = getRouteSummary(r)
@@ -1076,15 +1089,27 @@ export default function RouteMap({ origin, destination, polyline, distance, dura
         <div className="mt-4 flex items-center justify-between gap-4 text-sm">
           <div className="flex gap-4 items-center">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-green-500"></div>
+              <div className="flex items-center justify-center w-6 h-4 rounded bg-green-500/20 border border-green-500/30">
+                <svg className="w-3 h-3 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+              </div>
               <span className="text-foreground">Light Traffic</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+              <div className="flex items-center justify-center w-6 h-4 rounded bg-orange-500/20 border border-orange-500/30">
+                <svg className="w-3 h-3 text-orange-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
               <span className="text-foreground">Moderate</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-red-500"></div>
+              <div className="flex items-center justify-center w-6 h-4 rounded bg-red-500/20 border border-red-500/30">
+                <svg className="w-3 h-3 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
               <span className="text-foreground">Heavy</span>
             </div>
             {isLoadingTraffic && (
