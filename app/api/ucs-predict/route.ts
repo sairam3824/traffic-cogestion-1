@@ -41,7 +41,9 @@ export async function POST(request: Request) {
       success: true,
       data: {
         prediction: data.prediction,
-        confidence: data.confidence,
+        confidence: typeof data.confidence === 'string' ? 
+          (data.confidence === 'high' ? 0.9 : data.confidence === 'medium' ? 0.7 : 0.5) : 
+          data.confidence,
         timestamp: data.timestamp,
         location: data.location,
         traffic_level: data.prediction < 30 ? 'low' : data.prediction < 70 ? 'medium' : 'high'

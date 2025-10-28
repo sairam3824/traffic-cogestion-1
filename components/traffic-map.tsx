@@ -16,9 +16,10 @@ interface TrafficMapProps {
   segments: TrafficSegment[]
   selectedSegment: string | null
   onSelectSegment: (id: string) => void
+  userLocation?: { lat: number; lng: number } | null
 }
 
-export default function TrafficMap({ segments, selectedSegment, onSelectSegment }: TrafficMapProps) {
+export default function TrafficMap({ segments, selectedSegment, onSelectSegment, userLocation: propUserLocation }: TrafficMapProps) {
   const [congestionData, setCongestionData] = useState<Record<string, number>>({})
   const [selectedInfo, setSelectedInfo] = useState<TrafficSegment | null>(null)
   const [mapCenter, setMapCenter] = useState({ lat: 16.5062, lng: 80.648 })
@@ -27,7 +28,7 @@ export default function TrafficMap({ segments, selectedSegment, onSelectSegment 
   const [showTransit, setShowTransit] = useState(false)
   const [showBicycling, setShowBicycling] = useState(false)
   const [mapType, setMapType] = useState<'roadmap' | 'satellite' | 'hybrid' | 'terrain'>('roadmap')
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(propUserLocation || null)
 
   const { theme } = useTheme()
 
@@ -70,12 +71,15 @@ export default function TrafficMap({ segments, selectedSegment, onSelectSegment 
   }, [])
 
   useEffect(() => {
-    if (segments.length > 0) {
+    if (propUserLocation) {
+      setUserLocation(propUserLocation)
+      setMapCenter(propUserLocation)
+    } else if (segments.length > 0) {
       const avgLat = segments.reduce((sum, s) => sum + s.latitude, 0) / segments.length
       const avgLng = segments.reduce((sum, s) => sum + s.longitude, 0) / segments.length
       setMapCenter({ lat: avgLat, lng: avgLng })
     }
-  }, [segments])
+  }, [segments, propUserLocation])
 
   const getSegmentColor = (segmentId: string) => {
     const congestion = congestionData[segmentId] || 0.3
