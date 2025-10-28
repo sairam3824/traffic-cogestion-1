@@ -28,74 +28,8 @@ export default function TrafficMap({ segments, selectedSegment, onSelectSegment 
   const [showBicycling, setShowBicycling] = useState(false)
   const [mapType, setMapType] = useState<'roadmap' | 'satellite' | 'hybrid' | 'terrain'>('roadmap')
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
-  const [nearbyTrafficPredictions, setNearbyTrafficPredictions] = useState<Array<{
-    lat: number;
-    lng: number;
-    prediction: number;
-    trafficLevel: 'low' | 'medium' | 'high';
-  }>>([])
-  const [isLoadingPredictions, setIsLoadingPredictions] = useState(false)
 
   const { theme } = useTheme()
-
-  // Function to fetch traffic predictions around a location
-  const fetchNearbyTrafficPredictions = async (centerLat: number, centerLng: number) => {
-    setIsLoadingPredictions(true)
-    const predictions = []
-    
-    try {
-      // Create a grid of points around the user's location (roughly 5km radius)
-      const gridSize = 0.02 // Approximately 2km spacing
-      const gridRadius = 2 // 2x2 grid around center
-      
-      for (let i = -gridRadius; i <= gridRadius; i++) {
-        for (let j = -gridRadius; j <= gridRadius; j++) {
-          const lat = centerLat + (i * gridSize)
-          const lng = centerLng + (j * gridSize)
-          
-          try {
-            const response = await fetch('/api/ucs-predict', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                latitude: lat,
-                longitude: lng,
-                timestamp: new Date().toISOString()
-              })
-            })
-            
-            if (response.ok) {
-              const result = await response.json()
-              if (result.success) {
-                const prediction = result.data.prediction
-                let trafficLevel: 'low' | 'medium' | 'high'
-                
-                if (prediction >= 60) trafficLevel = 'high'
-                else if (prediction >= 35) trafficLevel = 'medium'
-                else trafficLevel = 'low'
-                
-                predictions.push({
-                  lat,
-                  lng,
-                  prediction,
-                  trafficLevel
-                })
-              }
-            }
-          } catch (error) {
-            console.error('Error fetching prediction for', lat, lng, error)
-          }
-        }
-      }
-      
-      setNearbyTrafficPredictions(predictions)
-      console.log(`Fetched ${predictions.length} traffic predictions around user location`)
-    } catch (error) {
-      console.error('Error fetching nearby traffic predictions:', error)
-    } finally {
-      setIsLoadingPredictions(false)
-    }
-  }
 
   useEffect(() => {
     const fetchApiKey = async () => {
@@ -109,41 +43,6 @@ export default function TrafficMap({ segments, selectedSegment, onSelectSegment 
     }
 
     fetchApiKey()
-  }, [])
-
-  // Auto-get user location on component load
-  useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords
-          const userLoc = { lat: latitude, lng: longitude }
-          setUserLocation(userLoc)
-          setMapCenter(userLoc)
-          console.log("User location detected:", userLoc)
-          
-          // Fetch traffic predictions around user location
-          fetchNearbyTrafficPredictions(latitude, longitude)
-        },
-        (error) => {
-          console.log("Geolocation error:", error.message)
-          // Fallback to default location (Vijayawada, India)
-          const defaultLoc = { lat: 16.5062, lng: 80.648 }
-          setMapCenter(defaultLoc)
-          fetchNearbyTrafficPredictions(defaultLoc.lat, defaultLoc.lng)
-        },
-        { 
-          enableHighAccuracy: true, 
-          timeout: 10000, 
-          maximumAge: 300000 // 5 minutes cache
-        }
-      )
-    } else {
-      console.log("Geolocation not supported")
-      const defaultLoc = { lat: 16.5062, lng: 80.648 }
-      setMapCenter(defaultLoc)
-      fetchNearbyTrafficPredictions(defaultLoc.lat, defaultLoc.lng)
-    }
   }, [])
 
   useEffect(() => {
@@ -222,59 +121,14 @@ export default function TrafficMap({ segments, selectedSegment, onSelectSegment 
               title="Your location"
               icon={{
                 path: google.maps.SymbolPath.CIRCLE,
-                scale: 8,
+                scale: 6,
                 fillColor: "#4285F4",
                 fillOpacity: 1,
                 strokeColor: "white",
-                strokeWeight: 3,
+                strokeWeight: 2,
               }}
             />
           )}
-          
-          {/* Traffic prediction markers around user location */}
-          {nearbyTrafficPredictions.map((prediction, index) => {
-            const getTrafficColor = (level: string) => {
-              switch (level) {
-                case 'high': return '#ef4444'
-                case 'medium': return '#f97316'
-                case 'low': return '#10b981'
-                default: return '#6b7280'
-              }
-            }
-            
-            return (
-              <Marker
-                key={`prediction-${index}`}
-                position={{ lat: prediction.lat, lng: prediction.lng }}
-                title={`Traffic: ${prediction.trafficLevel.toUpperCase()} (${prediction.prediction.toFixed(1)}%)`}
-                icon={{
-                  path: google.maps.SymbolPath.CIRCLE,
-                  scale: 4,
-                  fillColor: getTrafficColor(prediction.trafficLevel),
-                  fillOpacity: 0.8,
-                  strokeColor: "white",
-                  strokeWeight: 1,
-                }}
-                onClick={() => {
-                  const infoWindow = new google.maps.InfoWindow({
-                    content: `
-                      <div style="padding: 8px; min-width: 120px;">
-                        <strong style="color: ${getTrafficColor(prediction.trafficLevel)};">
-                          ${prediction.trafficLevel.toUpperCase()} TRAFFIC
-                        </strong><br/>
-                        <span>Congestion: ${prediction.prediction.toFixed(1)}%</span><br/>
-                        <span style="font-size: 11px; color: #666;">
-                          AI Prediction
-                        </span>
-                      </div>
-                    `,
-                    position: { lat: prediction.lat, lng: prediction.lng }
-                  })
-                  infoWindow.open(mapCenter as any)
-                }}
-              />
-            )
-          })}
           {segments.map((segment) => (
             <div key={segment.id}>
               {/* Polyline for segment */}
@@ -384,8 +238,7 @@ export default function TrafficMap({ segments, selectedSegment, onSelectSegment 
           </div>
         </div>
         <button
-          className="ml-auto px-3 py-1 rounded-md border bg-card text-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
-          disabled={isLoadingPredictions}
+          className="ml-auto px-3 py-1 rounded-md border bg-card text-foreground hover:bg-accent hover:text-accent-foreground"
           onClick={() => {
             if (!navigator.geolocation) return
             navigator.geolocation.getCurrentPosition(
@@ -394,48 +247,48 @@ export default function TrafficMap({ segments, selectedSegment, onSelectSegment 
                 const loc = { lat: latitude, lng: longitude }
                 setUserLocation(loc)
                 setMapCenter(loc)
-                fetchNearbyTrafficPredictions(latitude, longitude)
               },
               () => {},
               { enableHighAccuracy: true, timeout: 10000 },
             )
           }}
         >
-          {isLoadingPredictions ? "Loading..." : "My location"}
+          My location
         </button>
       </div>
-
-      {/* Loading indicator */}
-      {isLoadingPredictions && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-          <span>Loading traffic predictions around your location...</span>
-        </div>
-      )}
-      
-      {/* Traffic info */}
-      {nearbyTrafficPredictions.length > 0 && !isLoadingPredictions && (
-        <div className="text-sm text-muted-foreground">
-          ✅ Showing {nearbyTrafficPredictions.length} AI traffic predictions around your location
-        </div>
-      )}
 
       {/* Legend */}
       <div className="flex gap-4 text-sm">
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-green-500"></div>
+          <div className="flex items-center justify-center w-6 h-4 rounded bg-green-500/20 border border-green-500/30">
+            <svg className="w-3 h-3 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+            </svg>
+          </div>
           <span className="text-foreground">Free</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+          <div className="flex items-center justify-center w-6 h-4 rounded bg-yellow-500/20 border border-yellow-500/30">
+            <svg className="w-3 h-3 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+            </svg>
+          </div>
           <span className="text-foreground">Moderate</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+          <div className="flex items-center justify-center w-6 h-4 rounded bg-orange-500/20 border border-orange-500/30">
+            <svg className="w-3 h-3 text-orange-600" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+          </div>
           <span className="text-foreground">Heavy</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-red-500"></div>
+          <div className="flex items-center justify-center w-6 h-4 rounded bg-red-500/20 border border-red-500/30">
+            <svg className="w-3 h-3 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+          </div>
           <span className="text-foreground">Severe</span>
         </div>
       </div>
