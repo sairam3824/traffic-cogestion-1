@@ -28,18 +28,18 @@ export default function RouteDetails({
   
   const getTrafficColor = (density: string) => {
     switch (density) {
-      case 'low': return 'text-green-500'
-      case 'medium': return 'text-orange-500'
-      case 'high': return 'text-red-500'
+      case 'low': return 'text-green-400'
+      case 'medium': return 'text-orange-400'
+      case 'high': return 'text-red-400'
       default: return 'text-muted-foreground'
     }
   }
 
   const getTrafficBgColor = (density: string) => {
     switch (density) {
-      case 'low': return 'bg-green-500/10 border-green-500/20'
-      case 'medium': return 'bg-orange-500/10 border-orange-500/20'
-      case 'high': return 'bg-red-500/10 border-red-500/20'
+      case 'low': return 'bg-green-500/20 border-green-500/40'
+      case 'medium': return 'bg-orange-500/20 border-orange-500/40'
+      case 'high': return 'bg-red-500/20 border-red-500/40'
       default: return 'bg-muted border-border'
     }
   }
@@ -150,29 +150,32 @@ export default function RouteDetails({
         )}
 
         {/* Traffic Density Distribution */}
-        <div className="space-y-2">
-          <h4 className="font-semibold text-sm text-foreground">Route Traffic Analysis</h4>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="text-center p-2 rounded-lg bg-green-500/10 border border-green-500/20">
-              <div className="text-xs text-muted-foreground">Light</div>
-              <div className="text-lg font-bold text-green-500">
+        <div className="space-y-3">
+          <h4 className="font-semibold text-sm text-foreground flex items-center gap-2">
+            <span className="text-primary">📊</span>
+            Route Traffic Analysis
+          </h4>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="text-center p-3 rounded-lg bg-green-500/20 border-2 border-green-500/40 hover:bg-green-500/30 transition-colors">
+              <div className="text-xs text-green-400 font-medium">Light</div>
+              <div className="text-2xl font-bold text-green-400">
                 {steps.filter(s => s.traffic_density === 'low').length}
               </div>
-              <div className="text-xs text-muted-foreground">segments</div>
+              <div className="text-xs text-green-300">segments</div>
             </div>
-            <div className="text-center p-2 rounded-lg bg-orange-500/10 border border-orange-500/20">
-              <div className="text-xs text-muted-foreground">Moderate</div>
-              <div className="text-lg font-bold text-orange-500">
+            <div className="text-center p-3 rounded-lg bg-orange-500/20 border-2 border-orange-500/40 hover:bg-orange-500/30 transition-colors">
+              <div className="text-xs text-orange-400 font-medium">Moderate</div>
+              <div className="text-2xl font-bold text-orange-400">
                 {steps.filter(s => s.traffic_density === 'medium').length}
               </div>
-              <div className="text-xs text-muted-foreground">segments</div>
+              <div className="text-xs text-orange-300">segments</div>
             </div>
-            <div className="text-center p-2 rounded-lg bg-red-500/10 border border-red-500/20">
-              <div className="text-xs text-muted-foreground">Heavy</div>
-              <div className="text-lg font-bold text-red-500">
+            <div className="text-center p-3 rounded-lg bg-red-500/20 border-2 border-red-500/40 hover:bg-red-500/30 transition-colors">
+              <div className="text-xs text-red-400 font-medium">Heavy</div>
+              <div className="text-2xl font-bold text-red-400">
                 {steps.filter(s => s.traffic_density === 'high').length}
               </div>
-              <div className="text-xs text-muted-foreground">segments</div>
+              <div className="text-xs text-red-300">segments</div>
             </div>
           </div>
         </div>
