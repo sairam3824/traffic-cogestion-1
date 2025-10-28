@@ -1,8 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { GoogleMap, LoadScript, Polyline, Marker, InfoWindow, TrafficLayer, TransitLayer, BicyclingLayer } from "@react-google-maps/api"
-import { useTheme } from "next-themes"
+import { GoogleMap, LoadScript, TrafficLayer, TransitLayer, BicyclingLayer } from "@react-google-maps/api"
+
 
 interface TrafficSegment {
   id: string
@@ -20,8 +20,7 @@ interface TrafficMapProps {
 }
 
 export default function TrafficMap({ segments, selectedSegment, onSelectSegment, userLocation: propUserLocation }: TrafficMapProps) {
-  const [congestionData, setCongestionData] = useState<Record<string, number>>({})
-  const [selectedInfo, setSelectedInfo] = useState<TrafficSegment | null>(null)
+
   const [mapCenter, setMapCenter] = useState({ lat: 16.5062, lng: 80.648 })
   const [apiKey, setApiKey] = useState<string>("")
   const [showTraffic, setShowTraffic] = useState(true)
@@ -29,8 +28,6 @@ export default function TrafficMap({ segments, selectedSegment, onSelectSegment,
   const [showBicycling, setShowBicycling] = useState(false)
   const [mapType, setMapType] = useState<'roadmap' | 'satellite' | 'hybrid' | 'terrain'>('roadmap')
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(propUserLocation || null)
-
-  const { theme } = useTheme()
 
   useEffect(() => {
     const fetchApiKey = async () => {
@@ -46,29 +43,7 @@ export default function TrafficMap({ segments, selectedSegment, onSelectSegment,
     fetchApiKey()
   }, [])
 
-  useEffect(() => {
-    const fetchCongestionData = async () => {
-      try {
-        const response = await fetch("/api/traffic/observations")
-        const result = await response.json()
 
-        if (result.success && result.data) {
-          const congestionMap: Record<string, number> = {}
-          result.data.forEach((obs: any) => {
-            const congestion = Math.max(0, Math.min(1, 1 - obs.speed_kmh / 100))
-            congestionMap[obs.segment_id] = congestion
-          })
-          setCongestionData(congestionMap)
-        }
-      } catch (error) {
-        console.error("Error fetching congestion data:", error)
-      }
-    }
-
-    fetchCongestionData()
-    const interval = setInterval(fetchCongestionData, 30000)
-    return () => clearInterval(interval)
-  }, [])
 
   useEffect(() => {
     if (propUserLocation) {
@@ -81,13 +56,7 @@ export default function TrafficMap({ segments, selectedSegment, onSelectSegment,
     }
   }, [segments, propUserLocation])
 
-  const getSegmentColor = (segmentId: string) => {
-    const congestion = congestionData[segmentId] || 0.3
-    if (congestion > 0.7) return "#ef4444" // red
-    if (congestion > 0.5) return "#f97316" // orange
-    if (congestion > 0.3) return "#eab308" // yellow
-    return "#10b981" // green
-  }
+
 
   const mapContainerStyle = {
     width: "100%",
@@ -119,75 +88,6 @@ export default function TrafficMap({ segments, selectedSegment, onSelectSegment,
           {showTraffic && <TrafficLayer />}
           {showTransit && <TransitLayer />}
           {showBicycling && <BicyclingLayer />}
-          {userLocation && (
-            <Marker
-              position={userLocation}
-              title="Your location"
-              icon={{
-                path: google.maps.SymbolPath.CIRCLE,
-                scale: 6,
-                fillColor: "#4285F4",
-                fillOpacity: 1,
-                strokeColor: "white",
-                strokeWeight: 2,
-              }}
-            />
-          )}
-          {segments.map((segment) => (
-            <div key={segment.id}>
-              {/* Polyline for segment */}
-              <Polyline
-                path={[
-                  { lat: segment.latitude, lng: segment.longitude },
-                  { lat: segment.latitude + 0.01, lng: segment.longitude + 0.01 },
-                ]}
-                options={{
-                  strokeColor: getSegmentColor(segment.id),
-                  strokeWeight: selectedSegment === segment.id ? 6 : 4,
-                  strokeOpacity: 0.8,
-                  clickable: true,
-                }}
-                onClick={() => {
-                  onSelectSegment(segment.id)
-                  setSelectedInfo(segment)
-                }}
-              />
-
-              {/* Marker for segment */}
-              <Marker
-                position={{ lat: segment.latitude, lng: segment.longitude }}
-                title={segment.segment_name}
-                onClick={() => {
-                  onSelectSegment(segment.id)
-                  setSelectedInfo(segment)
-                }}
-                icon={{
-                  path: "M0,-28a28,28 0 0,1 56,0c0,28-28,68-28,68S0,0 0,-28z",
-                  fillColor: getSegmentColor(segment.id),
-                  fillOpacity: 1,
-                  strokeColor: "#fff",
-                  strokeWeight: 2,
-                  scale: 0.5,
-                }}
-              />
-
-              {/* Info window for selected segment */}
-              {selectedInfo?.id === segment.id && (
-                <InfoWindow
-                  position={{ lat: segment.latitude, lng: segment.longitude }}
-                  onCloseClick={() => setSelectedInfo(null)}
-                >
-                  <div className="bg-popover text-popover-foreground p-3 rounded text-sm border border-border">
-                    <h3 className="font-semibold">{segment.segment_name}</h3>
-                    <p className="text-xs text-muted-foreground">Type: {segment.road_type}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Congestion: {Math.round((congestionData[segment.id] || 0.3) * 100)}%
-                    </p>
-                  </div>
-                </InfoWindow>
-              )}
-            </div>
-          ))}
         </GoogleMap>
       </LoadScript>
 

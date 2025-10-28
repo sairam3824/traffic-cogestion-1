@@ -3,15 +3,13 @@
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import TrafficMap from "@/components/traffic-map"
-import PredictionChart from "@/components/prediction-chart"
+
 import AlertsPanel from "@/components/alerts-panel"
 import BackendStatus from "@/components/backend-status"
 import LiveLocationPredictions from "@/components/live-location-predictions"
 
 export default function TrafficPredictionPage() {
-  const [selectedSegment, setSelectedSegment] = useState<string | null>(null)
-  const [segments, setSegments] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [locationError, setLocationError] = useState<string | null>(null)
 
@@ -42,26 +40,7 @@ export default function TrafficPredictionPage() {
     return () => navigator.geolocation.clearWatch(watchId)
   }, [])
 
-  useEffect(() => {
-    const fetchSegments = async () => {
-      try {
-        const response = await fetch("/api/traffic/segments")
-        const data = await response.json()
-        if (data.success) {
-          setSegments(data.data)
-          if (data.data.length > 0) {
-            setSelectedSegment(data.data[0].id)
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching segments:", error)
-      } finally {
-        setLoading(false)
-      }
-    }
 
-    fetchSegments()
-  }, [])
 
   return (
     <main className="min-h-screen bg-background p-6">
@@ -101,18 +80,12 @@ export default function TrafficPredictionPage() {
               <CardDescription>Real-time congestion levels across segments</CardDescription>
             </CardHeader>
             <CardContent>
-              {loading ? (
-                <div className="h-96 bg-slate-800 rounded-lg flex items-center justify-center">
-                  <p className="text-muted-foreground">Loading map...</p>
-                </div>
-              ) : (
-                <TrafficMap
-                  segments={segments}
-                  selectedSegment={selectedSegment}
-                  onSelectSegment={setSelectedSegment}
-                  userLocation={userLocation}
-                />
-              )}
+              <TrafficMap
+                segments={[]}
+                selectedSegment={null}
+                onSelectSegment={() => {}}
+                userLocation={userLocation}
+              />
             </CardContent>
           </Card>
 
@@ -123,23 +96,9 @@ export default function TrafficPredictionPage() {
         </div>
 
         {/* Alerts Panel */}
-        <AlertsPanel selectedSegment={selectedSegment} />
+        <AlertsPanel selectedSegment={null} />
 
-        {/* Prediction Charts */}
-        {selectedSegment && (
-          <div className="grid grid-cols-1 gap-6">
-            {/* Prediction Chart */}
-            <Card className="border-border bg-card/50 backdrop-blur">
-              <CardHeader>
-                <CardTitle className="text-foreground">24-Hour Traffic Prediction</CardTitle>
-                <CardDescription>AI-powered traffic forecast for selected segment</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <PredictionChart segmentId={selectedSegment} />
-              </CardContent>
-            </Card>
-          </div>
-        )}
+
       </div>
     </main>
   )

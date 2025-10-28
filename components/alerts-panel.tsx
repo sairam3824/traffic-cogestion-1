@@ -14,12 +14,7 @@ export default function AlertsPanel({ selectedSegment }: AlertsPanelProps) {
   useEffect(() => {
     const fetchAlerts = async () => {
       try {
-        let url = "/api/alerts?isActive=true"
-        if (selectedSegment) {
-          url += `&segmentId=${selectedSegment}`
-        }
-        
-        const response = await fetch(url)
+        const response = await fetch("/api/alerts?isActive=true")
         const result = await response.json()
 
         if (result.success) {
@@ -37,7 +32,7 @@ export default function AlertsPanel({ selectedSegment }: AlertsPanelProps) {
     // Refresh alerts every 30 seconds
     const interval = setInterval(fetchAlerts, 30000)
     return () => clearInterval(interval)
-  }, [selectedSegment])
+  }, [])
 
   if (loading) {
     return (
