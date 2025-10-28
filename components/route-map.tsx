@@ -166,6 +166,20 @@ export default function RouteMap({ origin, destination, polyline, distance, dura
     setRouteScores(scores)
     setBestRouteIndex(bestIndex)
 
+    // Update current route traffic level based on selected route
+    const selectedRouteScore = scores[selectedRouteIndex] || scores[0]
+    if (selectedRouteScore) {
+      let routeLevel: 'low' | 'medium' | 'high'
+      if (selectedRouteScore.avgTraffic >= 65) {
+        routeLevel = 'high'
+      } else if (selectedRouteScore.avgTraffic >= 40) {
+        routeLevel = 'medium'
+      } else {
+        routeLevel = 'low'
+      }
+      setCurrentRouteTrafficLevel(routeLevel)
+    }
+
     // Auto-select best route if it's significantly better
     if (bestIndex !== selectedRouteIndex && scores[bestIndex].avgTraffic < scores[selectedRouteIndex]?.avgTraffic - 15) {
       setSelectedRouteIndex(bestIndex)
@@ -280,6 +294,9 @@ export default function RouteMap({ origin, destination, polyline, distance, dura
       }
 
       setTrafficSegments(segments)
+
+      // Calculate overall route traffic level
+      calculateRouteTrafficLevel(segments)
     } catch (error) {
       console.error('Error processing route for traffic predictions:', error)
     } finally {
@@ -367,7 +384,7 @@ export default function RouteMap({ origin, destination, polyline, distance, dura
   }
 
   const getTrafficLabel = () => {
-    switch (trafficDensity) {
+    switch (currentRouteTrafficLevel) {
       case 'high':
         return 'Heavy Traffic'
       case 'medium':
@@ -375,8 +392,45 @@ export default function RouteMap({ origin, destination, polyline, distance, dura
       case 'low':
         return 'Light Traffic'
       default:
-        return 'Unknown Traffic'
+        return 'Analyzing Traffic...'
     }
+  }
+
+  const getPolylineColorDynamic = () => {
+    switch (currentRouteTrafficLevel) {
+      case 'high':
+        return '#ef4444' // red
+      case 'medium':
+        return '#f97316' // orange
+      case 'low':
+        return '#10b981' // green
+      default:
+        return '#6b7280' // gray
+    }
+  }
+
+  // Function to calculate overall route traffic level
+  const calculateRouteTrafficLevel = (segments: any[]) => {
+    if (!segments || segments.length === 0) {
+      setCurrentRouteTrafficLevel('unknown')
+      return
+    }
+
+    // Calculate average traffic prediction across all segments
+    const totalPrediction = segments.reduce((sum, segment) => sum + (segment.prediction || 45), 0)
+    const avgPrediction = totalPrediction / segments.length
+
+    // Determine overall traffic level
+    let overallLevel: 'low' | 'medium' | 'high'
+    if (avgPrediction >= 65) {
+      overallLevel = 'high'
+    } else if (avgPrediction >= 40) {
+      overallLevel = 'medium'
+    } else {
+      overallLevel = 'low'
+    }
+
+    setCurrentRouteTrafficLevel(overallLevel)
   }
 
   const resetMapView = () => {
@@ -423,8 +477,8 @@ export default function RouteMap({ origin, destination, polyline, distance, dura
           <CardTitle className="text-foreground">Route Map</CardTitle>
           <CardDescription>
             Distance: {distance.toFixed(1)} km | Duration: {duration} min
-            {trafficDensity && trafficDensity !== 'unknown' && (
-              <span className="ml-2 text-xs px-2 py-1 rounded" style={{ backgroundColor: getPolylineColor(), color: 'white' }}>
+            {currentRouteTrafficLevel !== 'unknown' && (
+              <span className="ml-2 text-xs px-2 py-1 rounded" style={{ backgroundColor: getPolylineColorDynamic(), color: 'white' }}>
                 {getTrafficLabel()}
               </span>
             )}
@@ -467,8 +521,8 @@ export default function RouteMap({ origin, destination, polyline, distance, dura
           <CardTitle className="text-foreground">Route Map</CardTitle>
           <CardDescription>
             Distance: {distance.toFixed(1)} km | Duration: {duration} min
-            {trafficDensity && trafficDensity !== 'unknown' && (
-              <span className="ml-2 text-xs px-2 py-1 rounded" style={{ backgroundColor: getPolylineColor(), color: 'white' }}>
+            {currentRouteTrafficLevel !== 'unknown' && (
+              <span className="ml-2 text-xs px-2 py-1 rounded" style={{ backgroundColor: getPolylineColorDynamic(), color: 'white' }}>
                 {getTrafficLabel()}
               </span>
             )}
@@ -492,9 +546,14 @@ export default function RouteMap({ origin, destination, polyline, distance, dura
         <CardTitle className="text-foreground">Route Map</CardTitle>
         <CardDescription>
           Distance: {distance.toFixed(1)} km | Duration: {duration} min
-          {trafficDensity && trafficDensity !== 'unknown' && (
-            <span className="ml-2 text-xs px-2 py-1 rounded" style={{ backgroundColor: getPolylineColor(), color: 'white' }}>
+          {currentRouteTrafficLevel !== 'unknown' && (
+            <span className="ml-2 text-xs px-2 py-1 rounded" style={{ backgroundColor: getPolylineColorDynamic(), color: 'white' }}>
               {getTrafficLabel()}
+            </span>
+          )}
+          {isLoadingTraffic && (
+            <span className="ml-2 text-xs px-2 py-1 rounded bg-gray-500 text-white">
+              Analyzing Traffic...
             </span>
           )}
         </CardDescription>
@@ -902,6 +961,20 @@ export default function RouteMap({ origin, destination, polyline, distance, dura
                     onClick={() => {
                       setSelectedRouteIndex(idx)
                       getTrafficPredictionsForRoute(directions.routes[idx])
+
+                      // Update traffic level for the newly selected route
+                      const routeScore = routeScores[idx]
+                      if (routeScore) {
+                        let routeLevel: 'low' | 'medium' | 'high'
+                        if (routeScore.avgTraffic >= 65) {
+                          routeLevel = 'high'
+                        } else if (routeScore.avgTraffic >= 40) {
+                          routeLevel = 'medium'
+                        } else {
+                          routeLevel = 'low'
+                        }
+                        setCurrentRouteTrafficLevel(routeLevel)
+                      }
                     }}
                   >
                     <div className="flex items-center justify-between">
@@ -977,6 +1050,20 @@ export default function RouteMap({ origin, destination, polyline, distance, dura
                   onClick={() => {
                     setSelectedRouteIndex(idx)
                     getTrafficPredictionsForRoute(directions.routes[idx])
+
+                    // Update traffic level for the newly selected route
+                    const routeScore = routeScores[idx]
+                    if (routeScore) {
+                      let routeLevel: 'low' | 'medium' | 'high'
+                      if (routeScore.avgTraffic >= 65) {
+                        routeLevel = 'high'
+                      } else if (routeScore.avgTraffic >= 40) {
+                        routeLevel = 'medium'
+                      } else {
+                        routeLevel = 'low'
+                      }
+                      setCurrentRouteTrafficLevel(routeLevel)
+                    }
                   }}
                 >
                   Route {idx + 1} {isBest && '⭐'} · {durationMin} min
