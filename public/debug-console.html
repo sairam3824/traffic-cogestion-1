@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UCS Model - Debug Console</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 20px;
+        }
+        
+        .debug-container {
+            max-width: 1600px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .debug-panel {
+            background: #000;
+            border: 2px solid #00ff00;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        .debug-title {
+            color: #00ffff;
+            font-size: 20px;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+        
+        .test-button {
+            background: #00ff00;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: bold;
+            border-radius: 4px;
+        }
+        
+        .test-button:hover {
+            background: #00cc00;
+        }
+        
+        .log-output {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            padding: 15px;
+            margin-top: 15px;
+            height: 400px;
+            overflow-y: auto;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+        
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+        }
+        
+        .log-success { color: #00ff00; }
+        .log-error { color: #ff0000; }
+        .log-warning { color: #ffff00; }
+        .log-info { color: #00ccff; }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-online { background: #00ff00; }
+        .status-offline { background: #ff0000; }
+        .status-pending { background: #ffff00; animation: blink 1s infinite; }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .stat-card {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        
+        .stat-label {
+            color: #888;
+            font-size: 11px;
+        }
+        
+        .stat-value {
+            color: #00ff00;
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+        
+        pre {
+            background: #0a0a0a;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            color: #00ffff;
+        }
+    </style>
+</head>
+<body>
+    <div class="debug-container">
+        <!-- Left Panel - API Tests -->
+        <div class="debug-panel">
+            <div class="debug-title">🔧 API Tests</div>
+            
+            <div>
+                <span class="status-indicator" id="flask-status"></span>
+                <span>Flask Backend</span>
+            </div>
+            <div style="margin-top: 10px;">
+                <span class="status-indicator" id="nextjs-status"></span>
+                <span>Next.js API</span>
+            </div>
+            
+            <div style="margin-top: 20px;">
+                <button class="test-button" onclick="testFlaskHealth()">Test Flask Health</button>
+                <button class="test-button" onclick="testSinglePrediction()">Test Single Prediction</button>
+                <button class="test-button" onclick="testRoutePrediction()">Test Route Prediction</button>
+                <button class="test-button" onclick="testModelInfo()">Test Model Info</button>
+                <button class="test-button" onclick="testMapAPI()">Test Maps API</button>
+                <button class="test-button" onclick="runFullTest()">Run Full Test Suite</button>
+                <button class="test-button" onclick="clearLogs()" style="background: #ff4444;">Clear Logs</button>
+            </div>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Tests Run</div>
+                    <div class="stat-value" id="tests-run">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Tests Passed</div>
+                    <div class="stat-value" id="tests-passed">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Tests Failed</div>
+                    <div class="stat-value" id="tests-failed">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Avg Response Time</div>
+                    <div class="stat-value" id="avg-response">0ms</div>
+                </div>
+            </div>
+            
+            <div class="log-output" id="test-logs"></div>
+        </div>
+        
+        <!-- Right Panel - Network Monitor -->
+        <div class="debug-panel">
+            <div class="debug-title">📊 Network Monitor</div>
+            
+            <div style="margin-bottom: 15px;">
+                <button class="test-button" onclick="startMonitoring()">Start Monitoring</button>
+                <button class="test-button" onclick="stopMonitoring()">Stop Monitoring</button>
+            </div>
+            
+            <div class="log-output" id="network-logs"></div>
+        </div>
+    </div>
+
+    <script>
+        let testsRun = 0;
+        let testsPassed = 0;
+        let testsFailed = 0;
+        let responseTimes = [];
+        let monitoringInterval = null;
+        
+        // Initialize
+        window.addEventListener('DOMContentLoaded', () => {
+            log('info', '🚀 Debug console initialized');
+            checkBackendStatus();
+        });
+        
+        // Logging function
+        function log(type, message, data = null) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logDiv = document.getElementById('test-logs');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            
+            let content = `[${timestamp}] ${message}`;
+            if (data) {
+                content += `\n${JSON.stringify(data, null, 2)}`;
+            }
+            
+            entry.textContent = content;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function logNetwork(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logDiv = document.getElementById('network-logs');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry log-info';
+            entry.textContent = `[${timestamp}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function clearLogs() {
+            document.getElementById('test-logs').innerHTML = '';
+            document.getElementById('network-logs').innerHTML = '';
+            log('info', 'Logs cleared');
+        }
+        
+        // Update stats
+        function updateStats() {
+            document.getElementById('tests-run').textContent = testsRun;
+            document.getElementById('tests-passed').textContent = testsPassed;
+            document.getElementById('tests-failed').textContent = testsFailed;
+            
+            if (responseTimes.length > 0) {
+                const avg = responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length;
+                document.getElementById('avg-response').textContent = Math.round(avg) + 'ms';
+            }
+        }
+        
+        // Status indicators
+        function setStatus(element, status) {
+            const indicator = document.getElementById(element);
+            indicator.className = 'status-indicator status-' + status;
+        }
+        
+        // Check backend status
+        async function checkBackendStatus() {
+            setStatus('flask-status', 'pending');
+            setStatus('nextjs-status', 'pending');
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/health');
+                if (response.ok) {
+                    setStatus('flask-status', 'online');
+                    log('success', '✅ Flask backend is online');
+                } else {
+                    setStatus('flask-status', 'offline');
+                    log('error', '❌ Flask backend returned error');
+                }
+            } catch (error) {
+                setStatus('flask-status', 'offline');
+                log('error', '❌ Flask backend is offline', error.message);
+            }
+            
+            try {
+                const response = await fetch('/api/config/maps');
+                if (response.ok) {
+                    setStatus('nextjs-status', 'online');
+                    log('success', '✅ Next.js API is online');
+                } else {
+                    setStatus('nextjs-status', 'offline');
+                }
+            } catch (error) {
+                setStatus('nextjs-status', 'offline');
+                log('error', '❌ Next.js API error', error.message);
+            }
+        }
+        
+        // Test Flask health
+        async function testFlaskHealth() {
+            testsRun++;
+            log('info', '🧪 Testing Flask health endpoint...');
+            const startTime = Date.now();
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/health');
+                const data = await response.json();
+                const responseTime = Date.now() - startTime;
+                responseTimes.push(responseTime);
+                
+                if (data.status === 'healthy' && data.model_loaded) {
+                    testsPassed++;
+                    log('success', `✅ Flask health check passed (${responseTime}ms)`, data);
+                } else {
+                    testsFailed++;
+                    log('warning', '⚠️ Flask is running but model not loaded', data);
+                }
+            } catch (error) {
+                testsFailed++;
+                log('error', '❌ Flask health check failed', error.message);
+            }
+            
+            updateStats();
+        }
+        
+        // Test single prediction
+        async function testSinglePrediction() {
+            testsRun++;
+            log('info', '🧪 Testing single location prediction...');
+            const startTime = Date.now();
+            
+            const testData = {
+                latitude: 16.5062,
+                longitude: 80.6480,
+                timestamp: new Date().toISOString()
+            };
+            
+            try {
+                const response = await fetch('/api/ucs-predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(testData)
+                });
+                
+                const result = await response.json();
+                const responseTime = Date.now() - startTime;
+                responseTimes.push(responseTime);
+                
+                if (result.success && result.data) {
+                    testsPassed++;
+                    log('success', `✅ Prediction successful (${responseTime}ms)`, result.data);
+                } else {
+                    testsFailed++;
+                    log('error', '❌ Prediction failed', result);
+                }
+            } catch (error) {
+                testsFailed++;
+                log('error', '❌ Prediction request failed', error.message);
+            }
+            
+            updateStats();
+        }
+        
+        // Test route prediction
+        async function testRoutePrediction() {
+            testsRun++;
+            log('info', '🧪 Testing route prediction...');
+            const startTime = Date.now();
+            
+            const testData = {
+                waypoints: [
+                    { latitude: 16.5062, longitude: 80.6480 },
+                    { latitude: 16.5162, longitude: 80.6580 },
+                    { latitude: 16.5262, longitude: 80.6680 }
+                ]
+            };
+            
+            try {
+                const response = await fetch('/api/ucs-predict-route', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(testData)
+                });
+                
+                const result = await response.json();
+                const responseTime = Date.now() - startTime;
+                responseTimes.push(responseTime);
+                
+                if (result.success && result.data) {
+                    testsPassed++;
+                    log('success', `✅ Route prediction successful (${responseTime}ms)`, result.data.summary);
+                } else {
+                    testsFailed++;
+                    log('error', '❌ Route prediction failed', result);
+                }
+            } catch (error) {
+                testsFailed++;
+                log('error', '❌ Route prediction request failed', error.message);
+            }
+            
+            updateStats();
+        }
+        
+        // Test model info
+        async function testModelInfo() {
+            testsRun++;
+            log('info', '🧪 Testing model info endpoint...');
+            const startTime = Date.now();
+            
+            try {
+                const response = await fetch('/api/ucs-model-info');
+                const result = await response.json();
+                const responseTime = Date.now() - startTime;
+                responseTimes.push(responseTime);
+                
+                if (result.success && result.data) {
+                    testsPassed++;
+                    log('success', `✅ Model info retrieved (${responseTime}ms)`, result.data);
+                } else {
+                    testsFailed++;
+                    log('error', '❌ Model info failed', result);
+                }
+            } catch (error) {
+                testsFailed++;
+                log('error', '❌ Model info request failed', error.message);
+            }
+            
+            updateStats();
+        }
+        
+        // Test Maps API
+        async function testMapAPI() {
+            testsRun++;
+            log('info', '🧪 Testing Google Maps API key...');
+            
+            try {
+                const response = await fetch('/api/config/maps');
+                const result = await response.json();
+                
+                if (result.success && result.data && result.data.apiKey) {
+                    testsPassed++;
+                    log('success', '✅ Maps API key configured', { key: result.data.apiKey.substring(0, 10) + '...' });
+                } else {
+                    testsFailed++;
+                    log('error', '❌ Maps API key not configured', result);
+                }
+            } catch (error) {
+                testsFailed++;
+                log('error', '❌ Maps API test failed', error.message);
+            }
+            
+            updateStats();
+        }
+        
+        // Run full test suite
+        async function runFullTest() {
+            log('info', '🚀 Running full test suite...');
+            testsRun = 0;
+            testsPassed = 0;
+            testsFailed = 0;
+            responseTimes = [];
+            
+            await checkBackendStatus();
+            await new Promise(r => setTimeout(r, 500));
+            await testFlaskHealth();
+            await new Promise(r => setTimeout(r, 500));
+            await testMapAPI();
+            await new Promise(r => setTimeout(r, 500));
+            await testModelInfo();
+            await new Promise(r => setTimeout(r, 500));
+            await testSinglePrediction();
+            await new Promise(r => setTimeout(r, 500));
+            await testRoutePrediction();
+            
+            log('info', `✨ Test suite complete: ${testsPassed}/${testsRun} passed`);
+        }
+        
+        // Network monitoring
+        function startMonitoring() {
+            if (monitoringInterval) {
+                log('warning', '⚠️ Monitoring already active');
+                return;
+            }
+            
+            log('info', '📡 Starting network monitoring...');
+            
+            monitoringInterval = setInterval(async () => {
+                try {
+                    const start = Date.now();
+                    const response = await fetch('/api/config/maps');
+                    const time = Date.now() - start;
+                    logNetwork(`Next.js API: ${response.status} (${time}ms)`);
+                } catch (error) {
+                    logNetwork(`Next.js API: ERROR - ${error.message}`);
+                }
+            }, 2000);
+        }
+        
+        function stopMonitoring() {
+            if (monitoringInterval) {
+                clearInterval(monitoringInterval);
+                monitoringInterval = null;
+                log('info', '⏹️ Monitoring stopped');
+            }
+        }
+    </script>
+</body>
+</html>
