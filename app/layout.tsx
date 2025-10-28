@@ -26,13 +26,10 @@ export default function RootLayout({
           <nav className="bg-background border-b border-border sticky top-0 z-50 backdrop-blur-sm">
             <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-8">
-                <a href="/" className="text-foreground font-bold text-lg hover:text-primary transition-colors">
+                <a href="/traffic-prediction" className="text-foreground font-bold text-lg hover:text-primary transition-colors">
                   Traffic Prediction
                 </a>
                 <div className="flex gap-4">
-                  <a href="/" className="text-muted-foreground hover:text-foreground transition-colors text-sm">
-                    Dashboard
-                  </a>
                   <a href="/route-planner" className="text-muted-foreground hover:text-foreground transition-colors text-sm">
                     Route Planner
                   </a>
