@@ -7,6 +7,7 @@ import TrafficMap from "@/components/traffic-map"
 import AlertsPanel from "@/components/alerts-panel"
 import BackendStatus from "@/components/backend-status"
 import LiveLocationPredictions from "@/components/live-location-predictions"
+import TrafficHistoryChart from "@/components/traffic-history-chart"
 
 export default function TrafficPredictionPage() {
   const [loading, setLoading] = useState(false)
@@ -98,6 +99,8 @@ export default function TrafficPredictionPage() {
         {/* Alerts Panel */}
         <AlertsPanel selectedSegment={null} />
 
+        {/* Traffic History Chart */}
+        <TrafficHistoryChart />
 
       </div>
     </main>
