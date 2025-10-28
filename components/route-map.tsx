@@ -28,6 +28,7 @@ export default function RouteMap({ origin, destination, polyline, distance, dura
   const [routeScores, setRouteScores] = useState<{ [key: number]: { score: number, avgTraffic: number, recommendation: string } }>({})
   const [bestRouteIndex, setBestRouteIndex] = useState<number>(0)
   const [showRouteOptimization, setShowRouteOptimization] = useState(true)
+  const [currentRouteTrafficLevel, setCurrentRouteTrafficLevel] = useState<'low' | 'medium' | 'high' | 'unknown'>('unknown')
 
   const { theme } = useTheme()
 
