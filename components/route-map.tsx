@@ -541,7 +541,7 @@ export default function RouteMap({ origin, destination, polyline, distance, dura
             {/* Enhanced Directions rendering with traffic-colored segments */}
             {directions ? (
               <>
-                {/* Always render the base DirectionsRenderer for accurate road-following */}
+                {/* Use DirectionsRenderer with custom polyline options for traffic colors */}
                 <DirectionsRenderer
                   options={{
                     directions,
@@ -549,112 +549,102 @@ export default function RouteMap({ origin, destination, polyline, distance, dura
                     suppressMarkers: true,
                     preserveViewport: false,
                     polylineOptions: {
-                      strokeColor: trafficSegments.length > 0 ? '#e5e7eb' : getPolylineColor(), // Light gray when traffic overlay is active
-                      strokeOpacity: trafficSegments.length > 0 ? 0.3 : 0.7,
-                      strokeWeight: trafficSegments.length > 0 ? 2 : 5, // Thinner when traffic overlay is active
+                      strokeColor: '#2563eb', // Default blue
+                      strokeOpacity: 0.1, // Very transparent base
+                      strokeWeight: 8,
                     },
                   }}
                 />
 
-                {/* Overlay traffic-colored segments on top of the base route */}
-                {trafficSegments.length > 0 && trafficSegments.map((segment, index) => {
-                  const getSegmentColor = (trafficLevel: string) => {
-                    switch (trafficLevel) {
-                      case 'high': return '#ef4444'   // Red
-                      case 'medium': return '#f97316' // Orange  
-                      case 'low': return '#10b981'    // Green
-                      default: return '#6b7280'       // Gray
+                {/* Render traffic-colored segments using the complete route path */}
+                {directions.routes[selectedRouteIndex] && (() => {
+                  const route = directions.routes[selectedRouteIndex]
+                  const leg = route.legs[0]
+
+                  // Get the complete route path by decoding the overview polyline
+                  let completePath: google.maps.LatLng[] = []
+                  if (route.overview_polyline && window.google?.maps?.geometry?.encoding) {
+                    try {
+                      const polylinePoints = typeof route.overview_polyline === 'string'
+                        ? route.overview_polyline
+                        : (route.overview_polyline as any).points
+                      completePath = window.google.maps.geometry.encoding.decodePath(polylinePoints)
+                    } catch (error) {
+                      console.error('Error decoding route polyline:', error)
                     }
                   }
 
-                  // Get the actual road path for this step from Google Directions
-                  let segmentPath: google.maps.LatLng[] = []
-
-                  if (directions && directions.routes[selectedRouteIndex]) {
-                    const currentStep = directions.routes[selectedRouteIndex].legs[0].steps[segment.stepIndex]
-                    if (currentStep) {
-                      // Use the step's polyline for perfect road accuracy
-                      if (currentStep.polyline?.points && window.google?.maps?.geometry?.encoding) {
-                        try {
-                          segmentPath = window.google.maps.geometry.encoding.decodePath(currentStep.polyline.points)
-                        } catch (error) {
-                          console.error('Error decoding step polyline:', error)
-                          // Fallback to start/end locations
-                          segmentPath = [currentStep.start_location, currentStep.end_location]
-                        }
-                      } else {
-                        // Fallback to start/end locations
-                        segmentPath = [currentStep.start_location, currentStep.end_location]
-                      }
-                    }
-                  }
-
-                  // Skip segments without valid paths
-                  if (!segmentPath || segmentPath.length === 0) {
+                  if (completePath.length === 0) {
                     return null
                   }
 
-                  return (
-                    <Polyline
-                      key={`traffic-overlay-${segment.stepIndex || index}`}
-                      path={segmentPath}
-                      options={{
-                        strokeColor: getSegmentColor(segment.trafficLevel),
-                        strokeWeight: 5,
-                        strokeOpacity: 0.8,
-                        geodesic: false, // Important: false for road-following accuracy
-                        zIndex: 1000, // Ensure traffic overlay appears above base route
-                      }}
-                      onClick={() => {
-                        // Show traffic info for this segment
-                        const midPoint = segmentPath[Math.floor(segmentPath.length / 2)]
-                        const infoWindow = new google.maps.InfoWindow({
-                          content: `
-                            <div style="padding: 10px; min-width: 160px;">
-                              <strong style="color: ${getSegmentColor(segment.trafficLevel)};">
-                                ${segment.trafficLevel.toUpperCase()} TRAFFIC
-                              </strong><br/>
-                              <span>Congestion: ${segment.prediction.toFixed(1)}%</span><br/>
-                              <span style="font-size: 11px; color: #666;">
-                                Distance: ${((segment.distance || 0) / 1000).toFixed(1)} km
-                              </span><br/>
-                              <span style="font-size: 11px; color: #666;">
-                                Step ${segment.stepIndex + 1} of ${directions.routes[selectedRouteIndex].legs[0].steps.length}
-                              </span>
-                            </div>
-                          `,
-                          position: midPoint
-                        })
-                        infoWindow.open(mapInstance)
-                      }}
-                    />
-                  )
-                }).filter(Boolean)}
+                  // Divide the complete path into segments for traffic coloring
+                  const segmentSize = Math.max(1, Math.floor(completePath.length / 20)) // 20 segments max
+                  const coloredSegments = []
 
-                {/* Loading indicator overlay */}
+                  for (let i = 0; i < completePath.length - segmentSize; i += segmentSize) {
+                    const segmentPath = completePath.slice(i, i + segmentSize + 1)
+
+                    // Determine traffic level for this segment
+                    let trafficLevel = 'medium' // Default
+                    let prediction = 45 // Default prediction
+
+                    // Find corresponding traffic segment if available
+                    const segmentIndex = Math.floor((i / completePath.length) * trafficSegments.length)
+                    if (trafficSegments[segmentIndex]) {
+                      trafficLevel = trafficSegments[segmentIndex].trafficLevel
+                      prediction = trafficSegments[segmentIndex].prediction
+                    }
+
+                    const getSegmentColor = (level: string) => {
+                      switch (level) {
+                        case 'high': return '#ef4444'   // Red
+                        case 'medium': return '#f97316' // Orange  
+                        case 'low': return '#10b981'    // Green
+                        default: return '#6b7280'       // Gray
+                      }
+                    }
+
+                    coloredSegments.push(
+                      <Polyline
+                        key={`route-segment-${i}`}
+                        path={segmentPath}
+                        options={{
+                          strokeColor: getSegmentColor(trafficLevel),
+                          strokeWeight: 6,
+                          strokeOpacity: 0.9,
+                          geodesic: false,
+                          zIndex: 1000,
+                        }}
+                        onClick={() => {
+                          const midPoint = segmentPath[Math.floor(segmentPath.length / 2)]
+                          const infoWindow = new google.maps.InfoWindow({
+                            content: `
+                              <div style="padding: 10px; min-width: 160px;">
+                                <strong style="color: ${getSegmentColor(trafficLevel)};">
+                                  ${trafficLevel.toUpperCase()} TRAFFIC
+                                </strong><br/>
+                                <span>Congestion: ${prediction.toFixed(1)}%</span><br/>
+                                <span style="font-size: 11px; color: #666;">
+                                  Segment ${Math.floor(i / segmentSize) + 1} of ${Math.ceil(completePath.length / segmentSize)}
+                                </span>
+                              </div>
+                            `,
+                            position: midPoint
+                          })
+                          infoWindow.open(mapInstance)
+                        }}
+                      />
+                    )
+                  }
+
+                  return coloredSegments
+                })()}
+
+                {/* Loading indicator */}
                 {isLoadingTraffic && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '10px',
-                    left: '10px',
-                    background: 'rgba(255, 255, 255, 0.95)',
-                    padding: '8px 12px',
-                    borderRadius: '6px',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-                    fontSize: '13px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    zIndex: 1001
-                  }}>
-                    <div style={{
-                      width: '16px',
-                      height: '16px',
-                      border: '2px solid #e5e7eb',
-                      borderTop: '2px solid #3b82f6',
-                      borderRadius: '50%',
-                      animation: 'spin 1s linear infinite'
-                    }}></div>
+                  <div className="absolute top-4 left-4 bg-white/95 dark:bg-black/95 px-3 py-2 rounded-lg shadow-lg text-sm flex items-center gap-2 z-[1001]">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
                     <span>Analyzing traffic on route...</span>
                   </div>
                 )}
