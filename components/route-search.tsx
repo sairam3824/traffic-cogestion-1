@@ -5,6 +5,7 @@ import type React from "react"
 import { useState, useRef, useCallback } from "react"
 import { Search, MapPin } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
+import RouteSearchHistory from "@/components/route-search-history"
 
 interface LocationPrediction {
   place_id: string
@@ -18,6 +19,9 @@ interface LocationPrediction {
 interface RouteSearchProps {
   onRouteSelect: (origin: LocationPrediction, destination: LocationPrediction) => void
 }
+
+// Create a ref to store the history save function
+let saveToHistoryRef: ((origin: LocationPrediction, destination: LocationPrediction) => void) | null = null
 
 export default function RouteSearch({ onRouteSelect }: RouteSearchProps) {
   const [originQuery, setOriginQuery] = useState("")
@@ -105,13 +109,33 @@ export default function RouteSearch({ onRouteSelect }: RouteSearchProps) {
 
   const handlePlanRoute = () => {
     if (selectedOrigin && selectedDestination) {
+      // Save to history before planning route
+      if (saveToHistoryRef) {
+        saveToHistoryRef(selectedOrigin, selectedDestination)
+      }
       onRouteSelect(selectedOrigin, selectedDestination)
     }
   }
 
+  // Handle history selection
+  const handleHistorySelect = (origin: LocationPrediction, destination: LocationPrediction) => {
+    setSelectedOrigin(origin)
+    setSelectedDestination(destination)
+    setOriginQuery(origin.description)
+    setDestinationQuery(destination.description)
+    // Automatically plan the route
+    onRouteSelect(origin, destination)
+  }
+
+  // Function to register the history save callback
+  const registerHistorySave = (saveFunction: (origin: LocationPrediction, destination: LocationPrediction) => void) => {
+    saveToHistoryRef = saveFunction
+  }
+
   return (
-    <Card className="border-border bg-card/50 backdrop-blur">
-      <CardContent className="p-6 space-y-4">
+    <div className="space-y-4">
+      <Card className="border-border bg-card/50 backdrop-blur">
+        <CardContent className="p-6 space-y-4">
         {/* Origin Search */}
         <div className="space-y-2">
           <label className="text-sm font-medium text-foreground">From</label>
@@ -221,7 +245,14 @@ export default function RouteSearch({ onRouteSelect }: RouteSearchProps) {
             </div>
           </div>
         )}
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+
+      {/* Search History */}
+      <RouteSearchHistory 
+        onHistorySelect={handleHistorySelect}
+        onRegisterSave={registerHistorySave}
+      />
+    </div>
   )
 }
