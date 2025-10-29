@@ -84,7 +84,7 @@ export default function TrafficPredictionPage() {
               <TrafficMap
                 segments={[]}
                 selectedSegment={null}
-                onSelectSegment={() => {}}
+                onSelectSegment={() => { }}
                 userLocation={userLocation}
               />
             </CardContent>
