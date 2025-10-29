@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Eye, EyeOff, LogIn, AlertCircle } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { DottedSurface } from "@/components/ui/dotted-surface"
+import { cn } from '@/lib/utils'
 
 export default function SignInPage() {
   const [email, setEmail] = useState("")
@@ -62,8 +64,17 @@ export default function SignInPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-6">
-      <Card className="w-full max-w-md border-slate-700 bg-slate-900/50 backdrop-blur">
+    <DottedSurface className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+      <div className="absolute inset-0 flex items-center justify-center p-6">
+        <div
+          aria-hidden="true"
+          className={cn(
+            'pointer-events-none absolute -top-10 left-1/2 size-full -translate-x-1/2 rounded-full',
+            'bg-[radial-gradient(ellipse_at_center,--theme(--color-foreground/.1),transparent_50%)]',
+            'blur-[30px]',
+          )}
+        />
+        <Card className="w-full max-w-md border-slate-700 bg-slate-900/50 backdrop-blur relative z-10">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold text-white">Sign In</CardTitle>
           <CardDescription className="text-slate-400">
@@ -145,6 +156,7 @@ export default function SignInPage() {
 
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </DottedSurface>
   )
 }
