@@ -64,8 +64,9 @@ export default function SignInPage() {
   }
 
   return (
-    <DottedSurface className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
-      <div className="absolute inset-0 flex items-center justify-center p-6">
+    <>
+      <DottedSurface />
+      <div className="min-h-screen bg-gradient-to-br from-slate-950/60 via-slate-900/60 to-slate-950/60 flex items-center justify-center p-6 relative z-10">
         <div
           aria-hidden="true"
           className={cn(
@@ -157,6 +158,6 @@ export default function SignInPage() {
         </CardContent>
       </Card>
       </div>
-    </DottedSurface>
+    </>
   )
 }

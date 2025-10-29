@@ -79,8 +79,9 @@ export default function SignUpPage() {
 
   if (success) {
     return (
-      <DottedSurface className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
-        <div className="absolute inset-0 flex items-center justify-center p-6">
+      <>
+        <DottedSurface />
+        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-6 relative z-10">
           <div
             aria-hidden="true"
             className={cn(
@@ -100,13 +101,14 @@ export default function SignUpPage() {
           </CardContent>
         </Card>
         </div>
-      </DottedSurface>
+      </>
     )
   }
 
   return (
-    <DottedSurface className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
-      <div className="absolute inset-0 flex items-center justify-center p-6">
+    <>
+      <DottedSurface />
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-6 relative z-10">
         <div
           aria-hidden="true"
           className={cn(
@@ -231,6 +233,6 @@ export default function SignUpPage() {
         </CardContent>
       </Card>
       </div>
-    </DottedSurface>
+    </>
   )
 }
