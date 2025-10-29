@@ -222,12 +222,24 @@ export default function AdminPage() {
                 Manage Alerts
               </Button>
               <Button
-                onClick={() => alert('System settings coming soon')}
+                onClick={async () => {
+                  try {
+                    const response = await fetch('/api/setup/search-history-table', { method: 'POST' })
+                    const result = await response.json()
+                    if (result.success) {
+                      alert('✅ Search history table created successfully!')
+                    } else {
+                      alert('❌ Failed to create table: ' + result.error)
+                    }
+                  } catch (error) {
+                    alert('❌ Error: ' + error)
+                  }
+                }}
                 variant="outline"
                 className="w-full justify-start border-slate-600 text-slate-300 hover:bg-slate-800"
               >
                 <Activity className="w-4 h-4 mr-2" />
-                System Settings
+                Setup Search History Table
               </Button>
             </CardContent>
           </Card>

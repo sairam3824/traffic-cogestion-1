@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Clock, MapPin, X, Trash2 } from "lucide-react"
+import { createClient } from "@/lib/supabase/client"
 
 interface LocationPrediction {
   place_id: string
@@ -28,9 +29,71 @@ interface RouteSearchHistoryProps {
 
 export default function RouteSearchHistory({ onHistorySelect, onRegisterSave }: RouteSearchHistoryProps) {
   const [history, setHistory] = useState<SearchHistoryItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState<any>(null)
+  const supabase = createClient()
 
-  // Load history from localStorage on component mount
+  // Get user and load history
   useEffect(() => {
+    const initializeHistory = async () => {
+      try {
+        // Get current user
+        const { data: { user } } = await supabase.auth.getUser()
+        setUser(user)
+
+        if (user) {
+          // Load history from database
+          await loadHistoryFromDatabase()
+        } else {
+          // Load from localStorage for unauthenticated users
+          loadHistoryFromLocalStorage()
+        }
+      } catch (error) {
+        console.error('Error initializing history:', error)
+        loadHistoryFromLocalStorage()
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    initializeHistory()
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        setUser(session?.user ?? null)
+        if (session?.user) {
+          await loadHistoryFromDatabase()
+        } else {
+          loadHistoryFromLocalStorage()
+        }
+      }
+    )
+
+    return () => subscription.unsubscribe()
+  }, [supabase])
+
+  // Load history from database
+  const loadHistoryFromDatabase = async () => {
+    try {
+      const response = await fetch('/api/user/search-history')
+      const result = await response.json()
+
+      if (result.success) {
+        setHistory(result.data || [])
+      } else {
+        // If table doesn't exist, fall back to localStorage
+        console.log('Database table not ready, using localStorage')
+        loadHistoryFromLocalStorage()
+      }
+    } catch (error) {
+      console.error('Error loading search history:', error)
+      loadHistoryFromLocalStorage()
+    }
+  }
+
+  // Load history from localStorage (fallback)
+  const loadHistoryFromLocalStorage = () => {
     const savedHistory = localStorage.getItem('route-search-history')
     if (savedHistory) {
       try {
@@ -39,64 +102,48 @@ export default function RouteSearchHistory({ onHistorySelect, onRegisterSave }: 
       } catch (error) {
         console.error('Error parsing search history:', error)
         localStorage.removeItem('route-search-history')
+        setHistory([])
       }
     } else {
-      // Add some sample history for demonstration
-      const sampleHistory: SearchHistoryItem[] = [
-        {
-          id: 'sample-1',
-          origin: {
-            place_id: 'ChIJlfcOXx8XTjoRLJJAgbJqTtI',
-            description: 'Vijayawada, Andhra Pradesh, India',
-            main_text: 'Vijayawada',
-            secondary_text: 'Andhra Pradesh, India',
-            lat: 16.5062,
-            lng: 80.648
-          },
-          destination: {
-            place_id: 'ChIJ-_tVJHYYTjoRcVJNRtBvGTI',
-            description: 'Guntur, Andhra Pradesh, India',
-            main_text: 'Guntur',
-            secondary_text: 'Andhra Pradesh, India',
-            lat: 16.3067,
-            lng: 80.4365
-          },
-          timestamp: Date.now() - 2 * 60 * 60 * 1000, // 2 hours ago
-          searchCount: 3
-        },
-        {
-          id: 'sample-2',
-          origin: {
-            place_id: 'ChIJbU60yXAWrjsR4E9-UejD3_g',
-            description: 'Hyderabad, Telangana, India',
-            main_text: 'Hyderabad',
-            secondary_text: 'Telangana, India',
-            lat: 17.3850,
-            lng: 78.4867
-          },
-          destination: {
-            place_id: 'ChIJlfcOXx8XTjoRLJJAgbJqTtI',
-            description: 'Vijayawada, Andhra Pradesh, India',
-            main_text: 'Vijayawada',
-            secondary_text: 'Andhra Pradesh, India',
-            lat: 16.5062,
-            lng: 80.648
-          },
-          timestamp: Date.now() - 24 * 60 * 60 * 1000, // 1 day ago
-          searchCount: 1
-        }
-      ]
-      setHistory(sampleHistory)
-      localStorage.setItem('route-search-history', JSON.stringify(sampleHistory))
+      setHistory([])
     }
-  }, [])
+  }
 
   // Save a new search to history
-  const saveToHistory = (origin: LocationPrediction, destination: LocationPrediction) => {
+  const saveToHistory = async (origin: LocationPrediction, destination: LocationPrediction) => {
+    if (user) {
+      // Save to database for authenticated users
+      try {
+        const response = await fetch('/api/user/search-history', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ origin, destination }),
+        })
+
+        if (response.ok) {
+          // Reload history from database
+          await loadHistoryFromDatabase()
+        } else {
+          console.log('Database not ready, saving to localStorage')
+          saveToLocalStorage(origin, destination)
+        }
+      } catch (error) {
+        console.error('Error saving search history:', error)
+        saveToLocalStorage(origin, destination)
+      }
+    } else {
+      // Save to localStorage for unauthenticated users
+      saveToLocalStorage(origin, destination)
+    }
+  }
+
+  // Save to localStorage (fallback)
+  const saveToLocalStorage = (origin: LocationPrediction, destination: LocationPrediction) => {
     const searchKey = `${origin.place_id}-${destination.place_id}`
     
     setHistory(prevHistory => {
-      // Check if this route already exists
       const existingIndex = prevHistory.findIndex(item => 
         item.origin.place_id === origin.place_id && 
         item.destination.place_id === destination.place_id
@@ -105,7 +152,6 @@ export default function RouteSearchHistory({ onHistorySelect, onRegisterSave }: 
       let newHistory: SearchHistoryItem[]
 
       if (existingIndex >= 0) {
-        // Update existing entry - move to top and increment count
         const existingItem = prevHistory[existingIndex]
         newHistory = [
           {
@@ -116,7 +162,6 @@ export default function RouteSearchHistory({ onHistorySelect, onRegisterSave }: 
           ...prevHistory.filter((_, index) => index !== existingIndex)
         ]
       } else {
-        // Add new entry
         const newItem: SearchHistoryItem = {
           id: searchKey,
           origin,
@@ -127,29 +172,57 @@ export default function RouteSearchHistory({ onHistorySelect, onRegisterSave }: 
         newHistory = [newItem, ...prevHistory]
       }
 
-      // Keep only the last 10 searches
       newHistory = newHistory.slice(0, 10)
-
-      // Save to localStorage
       localStorage.setItem('route-search-history', JSON.stringify(newHistory))
-      
       return newHistory
     })
   }
 
   // Remove a specific item from history
-  const removeFromHistory = (id: string) => {
-    setHistory(prevHistory => {
-      const newHistory = prevHistory.filter(item => item.id !== id)
-      localStorage.setItem('route-search-history', JSON.stringify(newHistory))
-      return newHistory
-    })
+  const removeFromHistory = async (id: string) => {
+    if (user) {
+      try {
+        const response = await fetch(`/api/user/search-history?id=${id}`, {
+          method: 'DELETE',
+        })
+
+        if (response.ok) {
+          await loadHistoryFromDatabase()
+        } else {
+          console.error('Failed to delete search history item')
+        }
+      } catch (error) {
+        console.error('Error deleting search history item:', error)
+      }
+    } else {
+      setHistory(prevHistory => {
+        const newHistory = prevHistory.filter(item => item.id !== id)
+        localStorage.setItem('route-search-history', JSON.stringify(newHistory))
+        return newHistory
+      })
+    }
   }
 
   // Clear all history
-  const clearHistory = () => {
-    setHistory([])
-    localStorage.removeItem('route-search-history')
+  const clearHistory = async () => {
+    if (user) {
+      try {
+        const response = await fetch('/api/user/search-history?id=all', {
+          method: 'DELETE',
+        })
+
+        if (response.ok) {
+          setHistory([])
+        } else {
+          console.error('Failed to clear search history')
+        }
+      } catch (error) {
+        console.error('Error clearing search history:', error)
+      }
+    } else {
+      setHistory([])
+      localStorage.removeItem('route-search-history')
+    }
   }
 
   // Handle clicking on a history item
