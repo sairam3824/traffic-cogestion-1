@@ -23,8 +23,16 @@ export async function GET() {
     if (error) {
       console.error("Error fetching search history:", error)
       // If table doesn't exist, return empty array instead of error
-      if (error.code === 'PGRST116' || error.message?.includes('does not exist') || error.message?.includes('user_search_history')) {
-        return NextResponse.json({ success: true, data: [] })
+      if (error.code === 'PGRST116' || error.code === 'PGRST205' || 
+          error.message?.includes('does not exist') || 
+          error.message?.includes('user_search_history') ||
+          error.message?.includes('schema cache')) {
+        console.log('Search history table not found, returning empty array')
+        return NextResponse.json({ 
+          success: true, 
+          data: [], 
+          message: "Table not created yet. Please create the user_search_history table in Supabase." 
+        })
       }
       return NextResponse.json({ success: false, error: "Failed to fetch search history" }, { status: 500 })
     }
@@ -139,9 +147,16 @@ export async function POST(request: Request) {
 
       if (error) {
         console.error("Error creating search history:", error)
-        // If table doesn't exist, return success but don't save
-        if (error.message?.includes('does not exist') || error.message?.includes('user_search_history')) {
-          return NextResponse.json({ success: true, data: null, message: "Table not created yet" })
+        // If table doesn't exist, return success but indicate table needs creation
+        if (error.code === 'PGRST205' || 
+            error.message?.includes('does not exist') || 
+            error.message?.includes('user_search_history') ||
+            error.message?.includes('schema cache')) {
+          return NextResponse.json({ 
+            success: false, 
+            error: "Table not found", 
+            message: "Please create the user_search_history table in Supabase dashboard" 
+          }, { status: 404 })
         }
         return NextResponse.json({ success: false, error: "Failed to save search history" }, { status: 500 })
       }

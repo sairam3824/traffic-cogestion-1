@@ -199,12 +199,26 @@ export default function AdminPage() {
 
           <Card className="border-slate-700 bg-slate-900/50 backdrop-blur">
             <CardHeader>
-              <CardTitle className="text-white">Admin Tools</CardTitle>
+              <CardTitle className="text-white">Database Setup</CardTitle>
               <CardDescription className="text-slate-400">
-                Administrative functions and utilities
+                Configure Supabase tables and features
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
+              <div className="p-3 bg-blue-900/20 border border-blue-700 rounded-lg">
+                <h4 className="text-blue-400 font-medium mb-2">Search History Storage</h4>
+                <p className="text-sm text-slate-300 mb-3">
+                  Create the user_search_history table to enable cross-device search history sync.
+                </p>
+                <div className="space-y-2">
+                  <p className="text-xs text-slate-400">
+                    📋 Instructions: Go to Supabase Dashboard → SQL Editor → Run the SQL from CREATE_SUPABASE_TABLE.md
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    🔗 Dashboard: https://supabase.com/dashboard/project/acxezffpbglztbmbfczc/sql
+                  </p>
+                </div>
+              </div>
               <Button
                 onClick={() => alert('User management coming soon')}
                 variant="outline"
@@ -224,15 +238,67 @@ export default function AdminPage() {
               <Button
                 onClick={async () => {
                   try {
-                    const response = await fetch('/api/setup/search-history-table', { method: 'POST' })
-                    const result = await response.json()
-                    if (result.success) {
-                      alert('✅ Search history table created successfully!')
+                    // Create the table using Supabase client directly
+                    const { createClient } = await import('@/lib/supabase/client')
+                    const supabase = createClient()
+                    
+                    // Create table using raw SQL
+                    const { error } = await supabase.rpc('exec_sql', {
+                      sql: `
+                        CREATE TABLE IF NOT EXISTS public.user_search_history (
+                          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                          user_id UUID NOT NULL,
+                          origin_place_id TEXT NOT NULL,
+                          origin_description TEXT NOT NULL,
+                          origin_main_text TEXT NOT NULL,
+                          origin_secondary_text TEXT,
+                          origin_lat FLOAT NOT NULL,
+                          origin_lng FLOAT NOT NULL,
+                          destination_place_id TEXT NOT NULL,
+                          destination_description TEXT NOT NULL,
+                          destination_main_text TEXT NOT NULL,
+                          destination_secondary_text TEXT,
+                          destination_lat FLOAT NOT NULL,
+                          destination_lng FLOAT NOT NULL,
+                          search_count INTEGER DEFAULT 1,
+                          last_searched_at TIMESTAMP DEFAULT NOW(),
+                          created_at TIMESTAMP DEFAULT NOW()
+                        );
+                        
+                        CREATE INDEX IF NOT EXISTS idx_user_search_history_user_id 
+                          ON public.user_search_history(user_id);
+                        CREATE INDEX IF NOT EXISTS idx_user_search_history_last_searched 
+                          ON public.user_search_history(user_id, last_searched_at DESC);
+                        
+                        ALTER TABLE public.user_search_history ENABLE ROW LEVEL SECURITY;
+                        
+                        DROP POLICY IF EXISTS "Users can view own search history" ON public.user_search_history;
+                        DROP POLICY IF EXISTS "Users can insert own search history" ON public.user_search_history;
+                        DROP POLICY IF EXISTS "Users can update own search history" ON public.user_search_history;
+                        DROP POLICY IF EXISTS "Users can delete own search history" ON public.user_search_history;
+                        
+                        CREATE POLICY "Users can view own search history" ON public.user_search_history
+                          FOR SELECT USING (auth.uid() = user_id);
+                        CREATE POLICY "Users can insert own search history" ON public.user_search_history
+                          FOR INSERT WITH CHECK (auth.uid() = user_id);
+                        CREATE POLICY "Users can update own search history" ON public.user_search_history
+                          FOR UPDATE USING (auth.uid() = user_id);
+                        CREATE POLICY "Users can delete own search history" ON public.user_search_history
+                          FOR DELETE USING (auth.uid() = user_id);
+                      `
+                    })
+                    
+                    if (error) {
+                      console.error('SQL Error:', error)
+                      alert('❌ Failed to create table. Please create manually in Supabase dashboard.')
                     } else {
-                      alert('❌ Failed to create table: ' + result.error)
+                      alert('✅ Search history table created successfully!')
+                      // Refresh the page to update stats
+                      window.location.reload()
                     }
                   } catch (error) {
-                    alert('❌ Error: ' + error)
+                    console.error('Setup error:', error)
+                    alert('❌ Error: Please create the table manually in Supabase dashboard')
                   }
                 }}
                 variant="outline"

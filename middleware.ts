@@ -34,7 +34,7 @@ export async function middleware(request: NextRequest) {
 
   // Protected routes
   const protectedRoutes = ['/admin', '/monitoring', '/traffic-prediction', '/route-planner']
-  const adminRoutes = ['/admin']
+  const adminRoutes = ['/admin', '/monitoring']
   const authRoutes = ['/auth/signin', '/auth/signup']
 
   const isProtectedRoute = protectedRoutes.some(route => 

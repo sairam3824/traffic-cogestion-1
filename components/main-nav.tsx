@@ -46,14 +46,16 @@ export default function MainNav() {
       <a href="/route-planner" className="text-muted-foreground hover:text-foreground transition-colors text-sm">
         Route Planner
       </a>
-      <a href="/monitoring" className="text-muted-foreground hover:text-foreground transition-colors text-sm">
-        Monitoring
-      </a>
       {isAdmin && (
-        <a href="/admin" className="text-blue-400 hover:text-blue-300 transition-colors text-sm flex items-center gap-1">
-          <Shield className="w-3 h-3" />
-          Admin
-        </a>
+        <>
+          <a href="/monitoring" className="text-muted-foreground hover:text-foreground transition-colors text-sm">
+            Monitoring
+          </a>
+          <a href="/admin" className="text-blue-400 hover:text-blue-300 transition-colors text-sm flex items-center gap-1">
+            <Shield className="w-3 h-3" />
+            Admin
+          </a>
+        </>
       )}
     </div>
   )

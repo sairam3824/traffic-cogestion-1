@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LocalStorage Test</title>
+</head>
+<body>
+    <h1>LocalStorage Test</h1>
+    <button onclick="saveData()">Save Test Data</button>
+    <button onclick="loadData()">Load Test Data</button>
+    <button onclick="clearData()">Clear Data</button>
+    <div id="output"></div>
+
+    <script>
+        function saveData() {
+            const testData = [
+                {
+                    id: 'test-1',
+                    origin: { main_text: 'Vijayawada', place_id: 'test1' },
+                    destination: { main_text: 'Guntur', place_id: 'test2' },
+                    timestamp: Date.now(),
+                    searchCount: 1
+                }
+            ];
+            localStorage.setItem('route-search-history', JSON.stringify(testData));
+            document.getElementById('output').innerHTML = 'Data saved!';
+        }
+
+        function loadData() {
+            const data = localStorage.getItem('route-search-history');
+            document.getElementById('output').innerHTML = 'Loaded: ' + (data || 'No data');
+        }
+
+        function clearData() {
+            localStorage.removeItem('route-search-history');
+            document.getElementById('output').innerHTML = 'Data cleared!';
+        }
+
+        // Auto-load on page load
+        window.onload = loadData;
+    </script>
+</body>
+</html>

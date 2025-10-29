@@ -37,15 +37,22 @@ export default function RouteSearchHistory({ onHistorySelect, onRegisterSave }: 
   useEffect(() => {
     const initializeHistory = async () => {
       try {
-        // Get current user
+        // Get current user first
         const { data: { user } } = await supabase.auth.getUser()
         setUser(user)
 
         if (user) {
-          // Load history from database
-          await loadHistoryFromDatabase()
+          // For authenticated users, prioritize Supabase
+          console.log('User authenticated, loading from Supabase...')
+          try {
+            await loadHistoryFromDatabase()
+          } catch (dbError) {
+            console.log('Supabase not available, falling back to localStorage')
+            loadHistoryFromLocalStorage()
+          }
         } else {
-          // Load from localStorage for unauthenticated users
+          // For unauthenticated users, use localStorage
+          console.log('User not authenticated, using localStorage')
           loadHistoryFromLocalStorage()
         }
       } catch (error) {
@@ -61,10 +68,19 @@ export default function RouteSearchHistory({ onHistorySelect, onRegisterSave }: 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        setUser(session?.user ?? null)
-        if (session?.user) {
-          await loadHistoryFromDatabase()
+        const newUser = session?.user ?? null
+        setUser(newUser)
+        
+        if (newUser) {
+          console.log('User signed in, switching to Supabase storage')
+          try {
+            await loadHistoryFromDatabase()
+          } catch (error) {
+            console.log('Supabase not available, keeping localStorage')
+            loadHistoryFromLocalStorage()
+          }
         } else {
+          console.log('User signed out, switching to localStorage')
           loadHistoryFromLocalStorage()
         }
       }
@@ -94,26 +110,76 @@ export default function RouteSearchHistory({ onHistorySelect, onRegisterSave }: 
 
   // Load history from localStorage (fallback)
   const loadHistoryFromLocalStorage = () => {
-    const savedHistory = localStorage.getItem('route-search-history')
-    if (savedHistory) {
-      try {
+    try {
+      const savedHistory = localStorage.getItem('route-search-history')
+      if (savedHistory) {
         const parsed = JSON.parse(savedHistory)
+        console.log('Loaded from localStorage:', parsed)
         setHistory(parsed)
-      } catch (error) {
-        console.error('Error parsing search history:', error)
-        localStorage.removeItem('route-search-history')
-        setHistory([])
+      } else {
+        // Add some sample history for demonstration
+        const sampleHistory: SearchHistoryItem[] = [
+          {
+            id: 'sample-1',
+            origin: {
+              place_id: 'ChIJlfcOXx8XTjoRLJJAgbJqTtI',
+              description: 'Vijayawada, Andhra Pradesh, India',
+              main_text: 'Vijayawada',
+              secondary_text: 'Andhra Pradesh, India',
+              lat: 16.5062,
+              lng: 80.648
+            },
+            destination: {
+              place_id: 'ChIJ-_tVJHYYTjoRcVJNRtBvGTI',
+              description: 'Guntur, Andhra Pradesh, India',
+              main_text: 'Guntur',
+              secondary_text: 'Andhra Pradesh, India',
+              lat: 16.3067,
+              lng: 80.4365
+            },
+            timestamp: Date.now() - 15 * 60 * 1000, // 15 minutes ago
+            searchCount: 3
+          },
+          {
+            id: 'sample-2',
+            origin: {
+              place_id: 'ChIJbU60yXAWrjsR4E9-UejD3_g',
+              description: 'Hyderabad, Telangana, India',
+              main_text: 'Hyderabad',
+              secondary_text: 'Telangana, India',
+              lat: 17.3850,
+              lng: 78.4867
+            },
+            destination: {
+              place_id: 'ChIJlfcOXx8XTjoRLJJAgbJqTtI',
+              description: 'Vijayawada, Andhra Pradesh, India',
+              main_text: 'Vijayawada',
+              secondary_text: 'Andhra Pradesh, India',
+              lat: 16.5062,
+              lng: 80.648
+            },
+            timestamp: Date.now() - 3 * 60 * 60 * 1000, // 3 hours ago
+            searchCount: 1
+          }
+        ]
+        setHistory(sampleHistory)
+        localStorage.setItem('route-search-history', JSON.stringify(sampleHistory))
+        console.log('Created sample history:', sampleHistory)
       }
-    } else {
+    } catch (error) {
+      console.error('Error loading from localStorage:', error)
       setHistory([])
     }
   }
 
   // Save a new search to history
   const saveToHistory = async (origin: LocationPrediction, destination: LocationPrediction) => {
+    console.log('Saving search to history:', { origin: origin.main_text, destination: destination.main_text, user: !!user })
+    
     if (user) {
-      // Save to database for authenticated users
+      // For authenticated users, prioritize Supabase
       try {
+        console.log('Attempting to save to Supabase...')
         const response = await fetch('/api/user/search-history', {
           method: 'POST',
           headers: {
@@ -122,60 +188,77 @@ export default function RouteSearchHistory({ onHistorySelect, onRegisterSave }: 
           body: JSON.stringify({ origin, destination }),
         })
 
-        if (response.ok) {
-          // Reload history from database
+        const result = await response.json()
+        
+        if (response.ok && result.success) {
+          console.log('✅ Saved to Supabase successfully')
+          // Reload history from database to get updated data
           await loadHistoryFromDatabase()
         } else {
-          console.log('Database not ready, saving to localStorage')
+          console.log('❌ Supabase save failed, using localStorage fallback')
           saveToLocalStorage(origin, destination)
         }
       } catch (error) {
-        console.error('Error saving search history:', error)
+        console.error('❌ Error saving to Supabase:', error)
+        console.log('Using localStorage fallback')
         saveToLocalStorage(origin, destination)
       }
     } else {
-      // Save to localStorage for unauthenticated users
+      // For unauthenticated users, use localStorage
+      console.log('User not authenticated, saving to localStorage')
       saveToLocalStorage(origin, destination)
     }
   }
 
   // Save to localStorage (fallback)
   const saveToLocalStorage = (origin: LocationPrediction, destination: LocationPrediction) => {
-    const searchKey = `${origin.place_id}-${destination.place_id}`
-    
-    setHistory(prevHistory => {
-      const existingIndex = prevHistory.findIndex(item => 
-        item.origin.place_id === origin.place_id && 
-        item.destination.place_id === destination.place_id
-      )
+    try {
+      const searchKey = `${origin.place_id}-${destination.place_id}`
+      
+      setHistory(prevHistory => {
+        const existingIndex = prevHistory.findIndex(item => 
+          item.origin.place_id === origin.place_id && 
+          item.destination.place_id === destination.place_id
+        )
 
-      let newHistory: SearchHistoryItem[]
+        let newHistory: SearchHistoryItem[]
 
-      if (existingIndex >= 0) {
-        const existingItem = prevHistory[existingIndex]
-        newHistory = [
-          {
-            ...existingItem,
+        if (existingIndex >= 0) {
+          const existingItem = prevHistory[existingIndex]
+          newHistory = [
+            {
+              ...existingItem,
+              timestamp: Date.now(),
+              searchCount: existingItem.searchCount + 1
+            },
+            ...prevHistory.filter((_, index) => index !== existingIndex)
+          ]
+        } else {
+          const newItem: SearchHistoryItem = {
+            id: searchKey,
+            origin,
+            destination,
             timestamp: Date.now(),
-            searchCount: existingItem.searchCount + 1
-          },
-          ...prevHistory.filter((_, index) => index !== existingIndex)
-        ]
-      } else {
-        const newItem: SearchHistoryItem = {
-          id: searchKey,
-          origin,
-          destination,
-          timestamp: Date.now(),
-          searchCount: 1
+            searchCount: 1
+          }
+          newHistory = [newItem, ...prevHistory]
         }
-        newHistory = [newItem, ...prevHistory]
-      }
 
-      newHistory = newHistory.slice(0, 10)
-      localStorage.setItem('route-search-history', JSON.stringify(newHistory))
-      return newHistory
-    })
+        newHistory = newHistory.slice(0, 10)
+        
+        // Save to localStorage immediately
+        try {
+          localStorage.setItem('route-search-history', JSON.stringify(newHistory))
+          console.log('Saved to localStorage:', newHistory)
+        } catch (storageError) {
+          console.error('Error saving to localStorage:', storageError)
+        }
+        
+        return newHistory
+      })
+    } catch (error) {
+      console.error('Error in saveToLocalStorage:', error)
+    }
   }
 
   // Remove a specific item from history
@@ -236,15 +319,40 @@ export default function RouteSearchHistory({ onHistorySelect, onRegisterSave }: 
   const formatTimestamp = (timestamp: number) => {
     const now = Date.now()
     const diff = now - timestamp
+    const seconds = Math.floor(diff / 1000)
     const minutes = Math.floor(diff / (1000 * 60))
     const hours = Math.floor(diff / (1000 * 60 * 60))
     const days = Math.floor(diff / (1000 * 60 * 60 * 24))
 
-    if (minutes < 1) return 'Just now'
-    if (minutes < 60) return `${minutes}m ago`
-    if (hours < 24) return `${hours}h ago`
-    if (days < 7) return `${days}d ago`
-    return new Date(timestamp).toLocaleDateString()
+    // More precise time formatting
+    if (seconds < 30) return 'Just now'
+    if (seconds < 60) return 'Less than a minute ago'
+    if (minutes === 1) return '1 minute ago'
+    if (minutes < 60) return `${minutes} minutes ago`
+    if (hours === 1) return '1 hour ago'
+    if (hours < 24) return `${hours} hours ago`
+    if (days === 1) return 'Yesterday'
+    if (days < 7) return `${days} days ago`
+    if (days < 30) return `${Math.floor(days / 7)} week${Math.floor(days / 7) > 1 ? 's' : ''} ago`
+    
+    // For older dates, show the actual date
+    const date = new Date(timestamp)
+    const today = new Date()
+    
+    // If it's this year, don't show the year
+    if (date.getFullYear() === today.getFullYear()) {
+      return date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric' 
+      })
+    }
+    
+    // If it's a different year, show the full date
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric' 
+    })
   }
 
   // Register saveToHistory function with parent component
@@ -252,7 +360,7 @@ export default function RouteSearchHistory({ onHistorySelect, onRegisterSave }: 
     if (onRegisterSave) {
       onRegisterSave(saveToHistory)
     }
-  }, [onRegisterSave])
+  }, [onRegisterSave, user]) // Re-register when user changes
 
   if (history.length === 0) {
     return (
