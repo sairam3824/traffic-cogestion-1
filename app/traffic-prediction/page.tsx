@@ -50,7 +50,7 @@ export default function TrafficPredictionPage() {
         {/* Header */}
         <div className="space-y-2">
           <h1 className="text-4xl font-bold text-foreground">Traffic Congestion Prediction</h1>
-          <p className="text-muted-foreground">Real-time traffic analysis powered by AI-driven predictions</p>
+          <p className="text-muted-foreground">Real-time traffic analysis powered by AI-driven predictions.</p>
         </div>
 
         {/* Live Location Status */}
