@@ -3,6 +3,8 @@ import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { ThemeProvider } from "@/components/theme-provider"
+import AuthNav from "@/components/auth-nav"
+import MainNav from "@/components/main-nav"
 import "./globals.css"
 
 const _geist = Geist({ subsets: ["latin"] })
@@ -29,16 +31,10 @@ export default function RootLayout({
                 <a href="/traffic-prediction" className="text-foreground font-bold text-lg hover:text-primary transition-colors">
                   Traffic Prediction
                 </a>
-                <div className="flex gap-4">
-                  <a href="/route-planner" className="text-muted-foreground hover:text-foreground transition-colors text-sm">
-                    Route Planner
-                  </a>
-                  <a href="/monitoring" className="text-muted-foreground hover:text-foreground transition-colors text-sm">
-                    Monitoring
-                  </a>
-                </div>
+                <MainNav />
               </div>
-              <div>
+              <div className="flex items-center gap-4">
+                <AuthNav />
                 <ThemeToggle />
               </div>
             </div>
