@@ -134,11 +134,7 @@ export default function SignInPage() {
             </p>
           </div>
 
-          <div className="mt-4 p-3 bg-slate-800/50 rounded-lg">
-            <p className="text-xs text-slate-400 text-center">
-              Demo Account: demo@traffic.com / password123
-            </p>
-          </div>
+
         </CardContent>
       </Card>
     </div>
