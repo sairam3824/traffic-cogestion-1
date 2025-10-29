@@ -21,12 +21,19 @@ export default function SignInPage() {
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Basic validation
+    if (!email || !password) {
+      setError("Please fill in all fields")
+      return
+    }
+
     setLoading(true)
     setError(null)
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: email.trim(),
         password,
       })
 
@@ -37,7 +44,7 @@ export default function SignInPage() {
 
       if (data.user) {
         // Check if user is admin
-        const isAdmin = email === "admin@traffic.com"
+        const isAdmin = email.trim() === "admin@traffic.com"
         
         // Redirect based on user type
         if (isAdmin) {
@@ -47,6 +54,7 @@ export default function SignInPage() {
         }
       }
     } catch (err) {
+      console.error("Sign in error:", err)
       setError("An unexpected error occurred")
     } finally {
       setLoading(false)
@@ -63,7 +71,7 @@ export default function SignInPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSignIn} className="space-y-4">
+          <form onSubmit={handleSignIn} className="space-y-4" noValidate>
             {error && (
               <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400">
                 <AlertCircle className="w-4 h-4" />
@@ -79,7 +87,7 @@ export default function SignInPage() {
                 placeholder="Enter your email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                required
+                autoComplete="email"
                 className="bg-slate-800 border-slate-600 text-white placeholder-slate-400"
               />
             </div>
@@ -93,7 +101,7 @@ export default function SignInPage() {
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  required
+                  autoComplete="current-password"
                   className="bg-slate-800 border-slate-600 text-white placeholder-slate-400 pr-10"
                 />
                 <button

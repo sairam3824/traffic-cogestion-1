@@ -1,11 +1,13 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { usePathname } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Shield } from "lucide-react"
 
 export default function MainNav() {
   const [user, setUser] = useState<any>(null)
+  const pathname = usePathname()
   const supabase = createClient()
 
   useEffect(() => {
@@ -27,6 +29,17 @@ export default function MainNav() {
   }, [supabase])
 
   const isAdmin = user?.email === 'admin@traffic.com'
+  const isAuthPage = pathname?.startsWith('/auth/')
+
+  // Don't show navigation links on auth pages
+  if (isAuthPage) {
+    return null
+  }
+
+  // Only show navigation links if user is authenticated
+  if (!user) {
+    return null
+  }
 
   return (
     <div className="flex gap-4">
